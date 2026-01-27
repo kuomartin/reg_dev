@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>學員快速報到系統 | QR Code 掃描</title>
+    <meta name="description" content="學員報到系統，支援手機掃描 QR Code 與手動輸入，即時查驗學員身份。">
+    <meta name="theme-color" content="#2196f3">
+    <!-- Compiled and minified CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <!-- Import Google Icon Font -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2196f3;
+            --primary-dark: #1976d2;
+            --accent-color: #ff9800;
+            --success-color: #4caf50;
+            --error-color: #f44336;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            font-family: 'Roboto', sans-serif;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        .main-container {
+            margin-top: 3rem;
+            margin-bottom: 3rem;
+            padding: 2.5rem 2rem;
+            background: rgba(255, 255, 254, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        /* Responsive adjustments for Container */
+        @media only screen and (max-width: 600px) {
+            .main-container {
+                margin-top: 0;
+                margin-bottom: 0;
+                padding: 1.5rem 1rem;
+                border-radius: 0;
+                min-height: 100vh;
+                box-shadow: none;
+            }
+
+            .container {
+                width: 100% !important;
+                max-width: none !important;
+            }
+
+            h4 {
+                font-size: 1.8rem;
+            }
+
+            .input-field {
+                margin-top: 1rem;
+            }
+        }
+
+        #video-container {
+            width: 100%;
+            max-width: 480px;
+            margin: 1.5rem auto;
+            position: relative;
+            border: 4px solid var(--primary-color);
+            border-radius: 16px;
+            overflow: hidden;
+            display: none;
+            box-shadow: 0 12px 30px rgba(33, 150, 243, 0.2);
+            background: #000;
+        }
+
+        #video-container.mirrored {
+            transform: scaleX(-1);
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            display: none;
+        }
+
+        #qr-canvas {
+            width: 100%;
+            display: block;
+        }
+
+        #result-message {
+            margin-top: 1.5rem;
+            padding: 1.2rem;
+            border-radius: 12px;
+            display: none;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        #result-message:active {
+            transform: scale(0.98);
+        }
+
+        .btn-floating.btn-large {
+            width: 56px;
+            height: 56px;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .loading-icon {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .flex-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        /* Custom Toast Styles */
+        #custom-toast-container {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            width: 90%;
+            max-width: 450px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .custom-toast {
+            pointer-events: auto;
+            margin-bottom: 12px;
+            padding: 14px 24px;
+            border-radius: 16px;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            animation: toastIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: all 0.3s ease;
+            width: 100%;
+            font-weight: 500;
+        }
+
+        .custom-toast.hide {
+            opacity: 0;
+            transform: translateY(-20px) scale(0.9);
+        }
+
+        @keyframes toastIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px) scale(0.8);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .scanner-controls {
+            margin-top: 2rem;
+        }
+
+        /* Enhanced button styles */
+        .btn {
+            border-radius: 12px;
+            text-transform: none;
+            font-weight: 600;
+            padding: 0 2rem;
+            height: 45px;
+            line-height: 45px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+        }
+
+        .input-field i.prefix {
+            color: var(--primary-color);
+            transition: color 0.3s ease;
+        }
+
+        .input-field input:focus+label {
+            color: var(--primary-color) !important;
+        }
+
+        .input-field input:focus {
+            border-bottom: 2px solid var(--primary-color) !important;
+            box-shadow: 0 1px 0 0 var(--primary-color) !important;
+        }
+
+        /* Materialize grid override for better flex behavior */
+        .valign-wrapper-mobile {
+            display: flex;
+            align-items: center;
+        }
+
+        /* QR Code FAB Styles */
+        .qr-fab-container {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            z-index: 1000;
+        }
+
+        #qr-panel {
+            position: absolute;
+            bottom: 70px;
+            right: 0;
+            background: white;
+            padding: 1.5rem;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            display: none;
+            text-align: center;
+            width: 240px;
+            transform-origin: bottom right;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        #qr-panel.active {
+            display: block;
+            animation: fadeInScale 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.8) translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        #qr-panel h6 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            font-size: 1.1rem;
+        }
+
+        #qr-panel-qrcode {
+            display: flex;
+            justify-content: center;
+            padding: 10px;
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 0.5rem;
+        }
+
+        #qr-panel-qrcode img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .qr-url-text {
+            font-size: 0.75rem;
+            color: #777;
+            word-break: break-all;
+            margin-top: 0.5rem;
+            line-height: 1.4;
+        }
+
+        .btn-floating.btn-large i {
+            font-size: 1.8rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="custom-toast-container"></div>
+    <? if (typeof url === 'undefined' || !url) { ?>
+    <div class="orange darken-3 white-text center-align"
+        style="padding: 12px; font-weight: 500; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+        <div class="container flex-center">
+            <i class="material-icons">warning</i>
+            <span>請先將腳本部署為 Web App (網頁應用程式)，並前往 Web App 以取得 URL。</span>
+        </div>
+    </div>
+    <? } ?>
+    <div class="container">
+        <div class="main-container">
+            <div class="center-align" style="margin-bottom: 2rem;">
+                <h4 class="blue-text text-darken-2" style="font-weight: 700; margin-bottom: 0.5rem;">學員報到系統</h4>
+                <p class="grey-text">請掃描 QR Code 或輸入學員代號</p>
+            </div>
+
+            <div class="row valign-wrapper-mobile" style="margin-bottom: 1rem; flex-wrap: wrap;">
+                <div class="input-field col s12 m10">
+                    <i class="material-icons prefix">person_search</i>
+                    <input type="text" id="qr-input" class="validate">
+                    <label for="qr-input">輸入學員代號或手機號碼</label>
+                </div>
+                <div class="col s12 m2 center-align" style="margin-top: -10px;">
+                    <button id="checkin-button" class="btn-floating btn-large waves-effect waves-light green"
+                        title="送出報到">
+                        <i class="material-icons">send</i>
+                    </button>
+                </div>
+            </div>
+
+
+            <div class="divider"></div>
+
+            <div class="section center-align">
+                <div id="video-container">
+                    <video id="qr-video" playsinline></video>
+                    <canvas id="qr-canvas"></canvas>
+                </div>
+
+                <div class="row">
+                    <div class="col s12 center-align" style="margin-bottom: 1.5rem;">
+                        <div class="switch">
+                            <label>
+                                單次掃描
+                                <input type="checkbox" id="continuous-scan">
+                                <span class="lever"></span>
+                                連續掃描
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col s12 flex-center">
+                        <button id="start-button" class="btn waves-effect waves-light blue darken-1">
+                            <i class="material-icons left">qr_code_scanner</i>
+                            <span id="start-btn-text">開始掃描</span>
+                        </button>
+                        <button id="flip-button" class="btn waves-effect waves-light orange" disabled>
+                            <i class="material-icons">flip_camera_android</i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- <div class="footer center-align grey-text text-darken-1" style="margin-top: 3rem; font-size: 0.8rem;">
+                <p>&copy; 2026 by xaxaxax 學員報到系統 v2.1</p>
+            </div> -->
+        </div>
+    </div>
+
+    <!-- Floating QR Code Button -->
+    <div class="qr-fab-container">
+        <div id="qr-panel" class="z-depth-4">
+            <h6>掃描進入系統</h6>
+            <div id="qr-panel-qrcode"></div>
+            <div class="qr-url-text">
+                <a href="<?= url ?>" target="_blank">
+                    <?= url ?>
+                </a>
+            </div>
+        </div>
+        <button id="toggle-qr-btn" class="btn-floating btn-large waves-effect waves-light blue darken-2 tooltipped"
+            data-position="left" data-tooltip="顯示/隱藏系統 QR Code">
+            <i class="material-icons">qr_code_2</i>
+        </button>
+    </div>
+
+    <!-- Compiled and minified JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <!-- Load jsQR library from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+        // Initialize Materialize elements
+        document.addEventListener('DOMContentLoaded', function () {
+            M.AutoInit();
+        });
+
+        const videoContainer = document.getElementById('video-container');
+        const videoElem = document.getElementById('qr-video');
+        const qrInput = document.getElementById('qr-input');
+        const qrcode = document.getElementById('qrcode');
+        const startBtn = document.getElementById('start-button');
+        const startBtnText = document.getElementById('start-btn-text');
+        const flipBtn = document.getElementById('flip-button');
+        const checkinBtn = document.getElementById('checkin-button');
+        const toastContainer = document.getElementById('custom-toast-container');
+        const toggleQrBtn = document.getElementById('toggle-qr-btn');
+        const qrPanel = document.getElementById('qr-panel');
+        const qrPanelQrcode = document.getElementById('qr-panel-qrcode');
+        const continuousScanToggle = document.getElementById('continuous-scan');
+
+        let status = 'idle'; // scanning, processing, idle
+        let currentCamera = 'environment';
+        let animationFrameId = null;
+        let canvas = document.getElementById('qr-canvas');
+        let canvasContext = canvas.getContext('2d', { willReadFrequently: true });
+        let lastScannedCode = null;
+        let nullFramesCount = 0;
+        const NULL_FRAMES_THRESHOLD = 30; // About 0.5-1 second of no detection to reset lastScannedCode
+
+        let activeToast = null;
+
+        function showResult(message, type) {
+            // Remove previous loading toast if it exists
+            if (activeToast && activeToast.dataset.type === 'loading') {
+                hideToast(activeToast);
+            }
+
+            const toast = document.createElement('div');
+            toast.dataset.type = type;
+
+            let iconName = '';
+            let bgColor = '';
+
+            if (type === 'success') {
+                iconName = 'check_circle';
+                bgColor = 'green darken-1';
+            } else if (type === 'error') {
+                iconName = 'error';
+                bgColor = 'red darken-1';
+            } else if (type === 'loading') {
+                iconName = 'sync';
+                bgColor = 'blue darken-1';
+            }
+
+            toast.className = `custom-toast ${bgColor}`;
+            toast.innerHTML = `<i class="material-icons ${type === 'loading' ? 'loading-icon' : ''}">${iconName}</i><span>${message}</span>`;
+
+            toastContainer.appendChild(toast);
+            activeToast = toast;
+
+            // Auto hide for status messages (not loading)
+            if (type !== 'loading') {
+                setTimeout(() => {
+                    hideToast(toast);
+                }, 3500);
+            }
+
+            toast.onclick = () => hideToast(toast);
+        }
+
+        function hideToast(toast) {
+            if (!toast) return;
+            toast.classList.add('hide');
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+                if (activeToast === toast) activeToast = null;
+            }, 300);
+        }
+
+        function hideResult() {
+            if (activeToast) hideToast(activeToast);
+        }
+
+        function updateUI() {
+            if (status === 'scanning') {
+                videoContainer.style.display = 'block';
+                flipBtn.disabled = false;
+                startBtnText.textContent = '停止掃描';
+                startBtn.className = 'btn waves-effect waves-light red darken-1';
+                startBtn.disabled = false;
+            } else if (status === 'processing') {
+                startBtn.disabled = true;
+                flipBtn.disabled = true;
+            } else { // idle
+                videoContainer.style.display = 'none';
+                flipBtn.disabled = true;
+                startBtnText.textContent = '開始掃描';
+                startBtn.className = 'btn waves-effect waves-light blue darken-1';
+                startBtn.disabled = false;
+            }
+
+            if (currentCamera === 'user') {
+                videoContainer.classList.add('mirrored');
+            } else {
+                videoContainer.classList.remove('mirrored');
+            }
+        }
+
+        // Result message click handler is now handled inside showResult
+
+        function checkInStudent(id) {
+            if (typeof google === 'undefined') {
+                showResult('請在 Google Apps Script 中執行', 'error');
+                return;
+            }
+            if (!id || id.trim() === '') return;
+            status = 'processing';
+            updateUI();
+            showResult(`${id} 執行中...`, 'loading');
+            qrInput.value = '';
+
+            google.script.run
+                .withSuccessHandler((result) => {
+                    const isContinuous = continuousScanToggle.checked;
+                    status = isContinuous ? 'scanning' : 'idle';
+                    updateUI();
+
+                    if (result && result.message) {
+                        showResult(result.message, result.success ? 'success' : 'error');
+                    } else {
+                        showResult('未知錯誤', 'error');
+                    }
+                })
+                .withFailureHandler((error) => {
+                    const isContinuous = continuousScanToggle.checked;
+                    status = isContinuous ? 'scanning' : 'idle';
+                    updateUI();
+                    showResult(`報到失敗: ${error}`, 'error');
+                })
+                .checkInStudent(id);
+        };
+
+        function drawLine(begin, end, color) {
+            canvasContext.beginPath();
+            canvasContext.moveTo(begin.x, begin.y);
+            canvasContext.lineTo(end.x, end.y);
+            canvasContext.lineWidth = 4;
+            canvasContext.strokeStyle = color;
+            canvasContext.stroke();
+        }
+
+        function scanQRCode() {
+            if (status === 'idle') return;
+
+            if (status === 'scanning' && videoElem.readyState === videoElem.HAVE_ENOUGH_DATA) {
+                canvas.height = videoElem.videoHeight;
+                canvas.width = videoElem.videoWidth;
+                canvasContext.drawImage(videoElem, 0, 0, canvas.width, canvas.height);
+                const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "dontInvert",
+                });
+
+                if (code) {
+                    drawLine(code.location.topLeftCorner, code.location.topRightCorner, "#FF3B58");
+                    drawLine(code.location.topRightCorner, code.location.bottomRightCorner, "#FF3B58");
+                    drawLine(code.location.bottomRightCorner, code.location.bottomLeftCorner, "#FF3B58");
+                    drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "#FF3B58");
+
+                    console.log(`code: ${code.data}`);
+                    nullFramesCount = 0;
+                    let data = code.data.trim();
+                    if (data && data !== lastScannedCode) {
+                        lastScannedCode = data;
+                        qrInput.value = data;
+                        M.updateTextFields();
+                        if (!continuousScanToggle.checked) {
+                            stopScanning();
+                        }
+                        checkInStudent(data);
+                    }
+                } else {
+                    nullFramesCount++;
+                    if (nullFramesCount > NULL_FRAMES_THRESHOLD) {
+                        lastScannedCode = null;
+                    }
+                }
+            }
+            animationFrameId = requestAnimationFrame(scanQRCode);
+        }
+
+        async function startScanning() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: currentCamera },
+                    audio: false
+                });
+                videoElem.srcObject = stream;
+                videoElem.setAttribute('playsinline', true);
+                await videoElem.play();
+
+                status = 'scanning';
+                updateUI();
+
+                // Scroll to video container
+                videoContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                scanQRCode();
+            } catch (err) {
+                showResult('無法開啟相機，請檢查權限及連線安全性。', 'error');
+            }
+        }
+
+        function stopScanning() {
+            status = 'idle';
+            lastScannedCode = null; // Reset when stopping
+            nullFramesCount = 0;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            if (videoElem.srcObject) {
+                videoElem.srcObject.getTracks().forEach(track => track.stop());
+                videoElem.srcObject = null;
+            }
+            updateUI();
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (status === 'scanning') stopScanning();
+            else if (status === 'idle') startScanning();
+        });
+
+        flipBtn.addEventListener('click', async () => {
+            currentCamera = (currentCamera === 'environment') ? 'user' : 'environment';
+            if (status === 'scanning') {
+                stopScanning();
+                await startScanning();
+            }
+        });
+
+        checkinBtn.addEventListener('click', () => {
+            const id = qrInput.value.trim();
+            if (id) checkInStudent(id);
+            else showResult('請輸入學員代號或進行掃描', 'error');
+        });
+
+        qrInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const id = qrInput.value.trim();
+                if (id) checkInStudent(id);
+                else showResult('請輸入學員代號', 'error');
+            }
+        });
+
+        // QR Code Toggle Logic
+        let qrGenerated = false;
+        const appUrl = "<?= url ?>";
+
+        toggleQrBtn.addEventListener('click', () => {
+            if (!qrGenerated && appUrl) {
+                new QRCode(qrPanelQrcode, {
+                    text: appUrl,
+                    width: 180,
+                    height: 180,
+                    colorDark: "#2196f3",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+                qrGenerated = true;
+            }
+            qrPanel.classList.toggle('active');
+
+            // Toggle icon
+            const icon = toggleQrBtn.querySelector('i');
+            if (qrPanel.classList.contains('active')) {
+                icon.textContent = 'close';
+            } else {
+                icon.textContent = 'qr_code_2';
+            }
+        });
+
+        // Initialize tooltips
+        document.addEventListener('DOMContentLoaded', function () {
+            var elems = document.querySelectorAll('.tooltipped');
+            M.Tooltip.init(elems);
+        });
+
+
+    </script>
+</body>
+
+</html>
