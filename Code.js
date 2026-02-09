@@ -30,15 +30,14 @@ function doGet(e) {
 }
 /**
  * @param {string} query
- * @returns {string?} name
+ * @returns {Map<string, any> | null}
  */
-function findStudent(query) {
+function findStudentRow(query) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName('學員名單');
   let data = sheet.getDataRange().getValues();
   let title = data.shift();
   let idIndex = title.indexOf('學員代號');
-  let nameIndex = title.indexOf('姓名');
   let phoneIndex = title.indexOf('手機');
 
   for (let i = 0; i < data.length; i++) {
@@ -46,12 +45,26 @@ function findStudent(query) {
     let id = row[idIndex];
     let phone = row[phoneIndex];
     if (query === id || query === phone) {
-      let name = row[nameIndex];
-      return name;
+      return new Map(row.map((value, index) => [title[index], value]));
     }
   }
   return null;
 }
+
+/**
+ * replace string template with given values
+ * @param {string} template 
+ * @param {Map<string,any>} data 
+ * @returns {string}
+ */
+function msgFormat(template, data) {
+  let s = template;
+  for (let [key, value] of data) {
+    s = s.replaceAll(`{{${key}}}`, value);
+  }
+  return s;
+}
+
 /**
  * @param {string} studentId
  * @returns {{success: boolean, message: string}}
@@ -59,8 +72,8 @@ function findStudent(query) {
 function checkInStudent(studentId) {
   const lock = LockService.getDocumentLock();
   try {
-    let name = findStudent(studentId);
-    if (!name) {
+    let student = findStudentRow(studentId);
+    if (!student) {
       return { success: false, message: '查無此學員' };
     }
 
@@ -87,7 +100,9 @@ function checkInStudent(studentId) {
     // getRange(row, column, numRows, numColumns)
     sheet.getRange(targetRow, 1, 1, rowData[0].length).setValues(rowData);
 
-    return { success: true, message: '報到成功，姓名：' + name };
+    lock.releaseLock();
+    let msgTemplate = getMsgTemplate();
+    return { success: true, message: msgFormat(msgTemplate, student) };
   } catch (e) {
     return { success: false, message: '報到失敗: ' + e.toString() };
   } finally {
@@ -151,4 +166,16 @@ function restoreFomula() {
     }
   })
   ui.alert('還原成功:\n' + cells.join('\n'));
+}
+
+function getMsgTemplate() {
+  const jsonTemplate = PropertiesService.getScriptProperties().getProperty('msgTemplate') ||
+    '報到成功；姓名：{{姓名}}，序號：{{序號}}';
+  return JSON.parse(jsonTemplate);
+}
+
+function updateMsgTemplate(template) {
+  const jsonTemplate = JSON.stringify(template);
+  PropertiesService.getScriptProperties().setProperty('msgTemplate', jsonTemplate);
+  return { success: true, message: '訊息模板已更新' };
 }

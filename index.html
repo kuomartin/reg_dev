@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>學員快速報到系統 | QR Code 掃描</title>
+    <title>學員報到系統 | QR Code 掃描</title>
     <meta name="description" content="學員報到系統，支援手機掃描 QR Code 與手動輸入，即時查驗學員身份。">
     <meta name="theme-color" content="#2196f3">
     <!-- Compiled and minified CSS -->
@@ -232,11 +232,15 @@
             right: 24px;
             bottom: 24px;
             z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            align-items: flex-end;
         }
 
         #qr-panel {
             position: absolute;
-            bottom: 70px;
+            bottom: 80px;
             right: 0;
             background: white;
             padding: 1.5rem;
@@ -291,9 +295,22 @@
         .qr-url-text {
             font-size: 0.75rem;
             color: #777;
-            word-break: break-all;
-            margin-top: 0.5rem;
-            line-height: 1.4;
+            margin-top: 0.8rem;
+        }
+
+        .qr-url-text input {
+            font-size: 0.85rem !important;
+            height: 30px !important;
+            margin: 0 !important;
+            text-align: center;
+            border-bottom: 1px solid #eee !important;
+            color: #555;
+        }
+
+        .qr-url-text input:focus {
+            border-bottom: 1px solid var(--primary-color) !important;
+            box-shadow: none !important;
+            color: var(--primary-color);
         }
 
         .btn-floating.btn-large i {
@@ -374,21 +391,55 @@
         </div>
     </div>
 
-    <!-- Floating QR Code Button -->
+    <!-- Floating Buttons -->
     <div class="qr-fab-container">
-        <div id="qr-panel" class="z-depth-4">
-            <h6>掃描進入系統</h6>
-            <div id="qr-panel-qrcode"></div>
-            <div class="qr-url-text">
-                <a href="<?= url ?>" target="_blank">
-                    <?= url ?>
+        <button id="open-settings-btn"
+            class="btn-floating waves-effect waves-light grey darken-1 tooltipped modal-trigger" href="#settings-modal"
+            data-position="left" data-tooltip="編輯訊息模板">
+            <i class="material-icons">settings</i>
+        </button>
+
+        <div style="position: relative;">
+            <div id="qr-panel" class="z-depth-4">
+                <h6>掃描進入系統</h6>
+                <a id="qr-panel-link" href="<?= url ?>" target="_blank">
+                    <div id="qr-panel-qrcode"></div>
                 </a>
+                <div class="qr-url-text">
+                    <input type="text" id="qr-url-input" value="<?= url ?>" placeholder="輸入內容或網址">
+                </div>
+            </div>
+            <button id="toggle-qr-btn" class="btn-floating btn-large waves-effect waves-light blue darken-2 tooltipped"
+                data-position="left" data-tooltip="顯示/隱藏系統 QR Code">
+                <i class="material-icons">qr_code_2</i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <h5 class="blue-text text-darken-2"
+                style="font-weight: 700; display: flex; align-items: center; gap: 10px;">
+                <i class="material-icons">settings</i>設定訊息模板
+            </h5>
+            <p>請輸入報到成功後的訊息模板。使用 <code>{{變數名稱}}</code> 代替，接受任何學員名單標題列的內容（如：<code>{{姓名}}</code>）。</p>
+
+            <div class="input-field" style="margin-top: 2rem;">
+                <textarea id="template-textarea" class="materialize-textarea"
+                    placeholder="例如：報到成功，姓名：{{姓名}}"></textarea>
+                <label for="template-textarea" class="active">訊息模板內容</label>
+            </div>
+
+            <div class="grey-text" style="font-size: 0.85rem; background: #f5f5f5; padding: 10px; border-radius: 8px;">
+                <strong>常用變數：</strong> <code>{{姓名}}</code>, <code>{{學員代號}}</code>, <code>{{手機}}</code>
             </div>
         </div>
-        <button id="toggle-qr-btn" class="btn-floating btn-large waves-effect waves-light blue darken-2 tooltipped"
-            data-position="left" data-tooltip="顯示/隱藏系統 QR Code">
-            <i class="material-icons">qr_code_2</i>
-        </button>
+        <div class="modal-footer"
+            style="padding: 0 24px 20px; height: auto; display: flex; justify-content: flex-end; gap: 10px;">
+            <button class="modal-close waves-effect waves-grey btn-flat">取消</button>
+            <button id="save-template-btn" class="waves-effect waves-light btn blue">儲存設定</button>
+        </div>
     </div>
 
     <!-- Compiled and minified JavaScript -->
@@ -415,6 +466,9 @@
         const qrPanel = document.getElementById('qr-panel');
         const qrPanelQrcode = document.getElementById('qr-panel-qrcode');
         const continuousScanToggle = document.getElementById('continuous-scan');
+        const openSettingsBtn = document.getElementById('open-settings-btn');
+        const saveTemplateBtn = document.getElementById('save-template-btn');
+        const templateTextarea = document.getElementById('template-textarea');
 
         let status = 'idle'; // scanning, processing, idle
         let currentCamera = 'environment';
@@ -653,37 +707,99 @@
             }
         });
 
-        // QR Code Toggle Logic
-        let qrGenerated = false;
-        const appUrl = "<?= url ?>";
+        // QR Code Logic
+        let qrCodeInstance = null;
+        const appUrl = "<?= url || '' ?>";
+        const qrUrlInput = document.getElementById('qr-url-input');
+        const qrPanelLink = document.getElementById('qr-panel-link');
 
-        toggleQrBtn.addEventListener('click', () => {
-            if (!qrGenerated && appUrl) {
-                new QRCode(qrPanelQrcode, {
-                    text: appUrl,
+        function updateQrCode(text) {
+            if (!qrCodeInstance) {
+                qrCodeInstance = new QRCode(qrPanelQrcode, {
+                    text: text || " ",
                     width: 180,
                     height: 180,
                     colorDark: "#2196f3",
                     colorLight: "#ffffff",
                     correctLevel: QRCode.CorrectLevel.H
                 });
-                qrGenerated = true;
+            } else {
+                qrCodeInstance.clear();
+                qrCodeInstance.makeCode(text || " ");
             }
-            qrPanel.classList.toggle('active');
+            qrPanelLink.href = text || "javascript:void(0)";
+        }
+
+        qrUrlInput.addEventListener('input', (e) => {
+            updateQrCode(e.target.value);
+        });
+
+        toggleQrBtn.addEventListener('click', () => {
+            const isActive = qrPanel.classList.toggle('active');
+
+            if (isActive) {
+                // Initial generation or check for reset if needed
+                if (!qrCodeInstance) {
+                    updateQrCode(qrUrlInput.value || appUrl);
+                }
+            } else {
+                // Reset to appUrl after closing as requested
+                qrUrlInput.value = appUrl;
+                updateQrCode(appUrl);
+            }
 
             // Toggle icon
             const icon = toggleQrBtn.querySelector('i');
-            if (qrPanel.classList.contains('active')) {
-                icon.textContent = 'close';
-            } else {
-                icon.textContent = 'qr_code_2';
-            }
+            icon.textContent = isActive ? 'close' : 'qr_code_2';
         });
 
-        // Initialize tooltips
+        // Initialize tooltips and modals
         document.addEventListener('DOMContentLoaded', function () {
-            var elems = document.querySelectorAll('.tooltipped');
-            M.Tooltip.init(elems);
+            var tooltips = document.querySelectorAll('.tooltipped');
+            M.Tooltip.init(tooltips);
+
+            var modals = document.querySelectorAll('.modal');
+            M.Modal.init(modals, {
+                onOpenStart: function () {
+                    // Fetch current template when modal opens
+                    google.script.run
+                        .withSuccessHandler((template) => {
+                            templateTextarea.value = template;
+                            M.textareaAutoResize(templateTextarea);
+                            M.updateTextFields();
+                        })
+                        .getMsgTemplate();
+                }
+            });
+        });
+
+        // Save template logic
+        saveTemplateBtn.addEventListener('click', () => {
+            const newTemplate = templateTextarea.value.trim();
+            if (!newTemplate) {
+                showResult('模板不能為空', 'error');
+                return;
+            }
+
+            saveTemplateBtn.disabled = true;
+            saveTemplateBtn.textContent = '儲存中...';
+
+            google.script.run
+                .withSuccessHandler((result) => {
+                    saveTemplateBtn.disabled = false;
+                    saveTemplateBtn.textContent = '儲存設定';
+                    if (result.success) {
+                        showResult(result.message, 'success');
+                        const modal = M.Modal.getInstance(document.getElementById('settings-modal'));
+                        modal.close();
+                    }
+                })
+                .withFailureHandler((error) => {
+                    saveTemplateBtn.disabled = false;
+                    saveTemplateBtn.textContent = '儲存設定';
+                    showResult('儲存失敗: ' + error, 'error');
+                })
+                .updateMsgTemplate(newTemplate);
         });
 
 
