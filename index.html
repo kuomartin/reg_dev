@@ -159,13 +159,19 @@
             border-radius: 16px;
             color: white;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 12px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
             animation: toastIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             transition: all 0.3s ease;
             width: 100%;
             font-weight: 500;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .custom-toast i {
+            margin-top: 2px;
         }
 
         .custom-toast.hide {
@@ -487,6 +493,8 @@
                 hideToast(activeToast);
             }
 
+            console.log(JSON.stringify(message));
+
             const toast = document.createElement('div');
             toast.dataset.type = type;
 
@@ -505,7 +513,8 @@
             }
 
             toast.className = `custom-toast ${bgColor}`;
-            toast.innerHTML = `<i class="material-icons ${type === 'loading' ? 'loading-icon' : ''}">${iconName}</i><span>${message}</span>`;
+            toast.innerHTML = `<i class="material-icons ${type === 'loading' ? 'loading-icon' : ''}">${iconName}</i><span class="toast-message"></span>`;
+            toast.querySelector('.toast-message').textContent = message;
 
             toastContainer.appendChild(toast);
             activeToast = toast;

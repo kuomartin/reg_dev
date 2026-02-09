@@ -169,9 +169,13 @@ function restoreFomula() {
 }
 
 function getMsgTemplate() {
-  const jsonTemplate = PropertiesService.getScriptProperties().getProperty('msgTemplate') ||
-    '報到成功；姓名：{{姓名}}，序號：{{序號}}';
-  return JSON.parse(jsonTemplate);
+  const jsonTemplate = PropertiesService.getScriptProperties().getProperty('msgTemplate');
+  if (!jsonTemplate) return '報到成功；姓名：{{姓名}}，序號：{{序號}}';
+  try {
+    return JSON.parse(jsonTemplate);
+  } catch (e) {
+    return jsonTemplate;
+  }
 }
 
 function updateMsgTemplate(template) {
