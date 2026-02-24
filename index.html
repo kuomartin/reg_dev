@@ -507,13 +507,19 @@
                 document.getElementById('api-warning').style.display = 'block';
                 throw new Error("請先在網址上提供 ?api= 參數");
             }
-            const url = currentApiUrl + "?action=" + action;
+
+            // 將請求轉換為 GET 以徹底避開 Google Apps Script 的 POST CORS 限制
+            const params = new URLSearchParams();
+            params.append('action', action);
+            for (let key in data) {
+                params.append(key, data[key]);
+            }
+
+            const delim = currentApiUrl.includes('?') ? '&' : '?';
+            const url = currentApiUrl + delim + params.toString();
+
             const response = await fetch(url, {
-                method: "POST",
-                body: JSON.stringify(data),
-                headers: {
-                    "Content-Type": "text/plain;charset=utf-8"
-                }
+                method: "GET"
             });
             return await response.json();
         }
