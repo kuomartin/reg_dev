@@ -327,15 +327,13 @@
 
 <body>
     <div id="custom-toast-container"></div>
-    <? if (typeof url === 'undefined' || !url) { ?>
-    <div class="orange darken-3 white-text center-align"
-        style="padding: 12px; font-weight: 500; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+    <div id="api-warning" class="orange darken-3 white-text center-align"
+        style="padding: 12px; font-weight: 500; box-shadow: 0 2px 5px rgba(0,0,0,0.2); display: none;">
         <div class="container flex-center">
             <i class="material-icons">warning</i>
-            <span>請先將腳本部署為 Web App (網頁應用程式)，並前往 Web App 以取得 URL。</span>
+            <span>請先在腳本最上方設定您的 Web App URL (API_URL)！</span>
         </div>
     </div>
-    <? } ?>
     <div class="container">
         <div class="main-container">
             <div class="center-align" style="margin-bottom: 2rem;">
@@ -408,11 +406,11 @@
         <div style="position: relative;">
             <div id="qr-panel" class="z-depth-4">
                 <h6>掃描進入系統</h6>
-                <a id="qr-panel-link" href="<?= url ?>" target="_blank">
+                <a id="qr-panel-link" href="#" target="_blank">
                     <div id="qr-panel-qrcode"></div>
                 </a>
                 <div class="qr-url-text">
-                    <input type="text" id="qr-url-input" value="<?= url ?>" placeholder="輸入內容或網址">
+                    <input type="text" id="qr-url-input" value="" placeholder="輸入內容或網址">
                 </div>
             </div>
             <button id="toggle-qr-btn" class="btn-floating btn-large waves-effect waves-light blue darken-2 tooltipped"
@@ -486,6 +484,26 @@
         const NULL_FRAMES_THRESHOLD = 30; // About 0.5-1 second of no detection to reset lastScannedCode
 
         let activeToast = null;
+
+        // 1. 請填入你「重新部署」後的 Web App URL (記得權限要設定為所有人)
+        const API_URL = "";
+
+        // 共用的 API 呼叫函式
+        async function callApi(action, data = {}) {
+            if (!API_URL) {
+                document.getElementById('api-warning').style.display = 'block';
+                throw new Error("請先設定第一行的 API_URL");
+            }
+            const url = API_URL + "?action=" + action;
+            const response = await fetch(url, {
+                method: "POST",
+                body: JSON.stringify(data),
+                headers: {
+                    "Content-Type": "text/plain;charset=utf-8"
+                }
+            });
+            return await response.json();
+        }
 
         function showResult(message, type) {
             // Remove previous loading toast if it exists
@@ -571,36 +589,31 @@
 
         // Result message click handler is now handled inside showResult
 
-        function checkInStudent(id) {
-            if (typeof google === 'undefined') {
-                showResult('請在 Google Apps Script 中執行', 'error');
-                return;
-            }
+        async function checkInStudent(id) {
             if (!id || id.trim() === '') return;
             status = 'processing';
             updateUI();
             showResult(`${id} 執行中...`, 'loading');
             qrInput.value = '';
 
-            google.script.run
-                .withSuccessHandler((result) => {
-                    const isContinuous = continuousScanToggle.checked;
-                    status = isContinuous ? 'scanning' : 'idle';
-                    updateUI();
+            try {
+                const result = await callApi('checkInStudent', { id: id });
 
-                    if (result && result.message) {
-                        showResult(result.message, result.success ? 'success' : 'error');
-                    } else {
-                        showResult('未知錯誤', 'error');
-                    }
-                })
-                .withFailureHandler((error) => {
-                    const isContinuous = continuousScanToggle.checked;
-                    status = isContinuous ? 'scanning' : 'idle';
-                    updateUI();
-                    showResult(`報到失敗: ${error}`, 'error');
-                })
-                .checkInStudent(id);
+                const isContinuous = continuousScanToggle.checked;
+                status = isContinuous ? 'scanning' : 'idle';
+                updateUI();
+
+                if (result && result.message) {
+                    showResult(result.message, result.success ? 'success' : 'error');
+                } else {
+                    showResult('未知錯誤', 'error');
+                }
+            } catch (error) {
+                const isContinuous = continuousScanToggle.checked;
+                status = isContinuous ? 'scanning' : 'idle';
+                updateUI();
+                showResult(`報到失敗: ${error.message}`, 'error');
+            }
         };
 
         function drawLine(begin, end, color) {
@@ -718,7 +731,7 @@
 
         // QR Code Logic
         let qrCodeInstance = null;
-        const appUrl = "<?= url || '' ?>";
+        const appUrl = API_URL;
         const qrUrlInput = document.getElementById('qr-url-input');
         const qrPanelLink = document.getElementById('qr-panel-link');
 
@@ -769,21 +782,24 @@
 
             var modals = document.querySelectorAll('.modal');
             M.Modal.init(modals, {
-                onOpenStart: function () {
+                onOpenStart: async function () {
                     // Fetch current template when modal opens
-                    google.script.run
-                        .withSuccessHandler((template) => {
-                            templateTextarea.value = template;
+                    try {
+                        const result = await callApi('getMsgTemplate');
+                        if (result.success) {
+                            templateTextarea.value = result.message;
                             M.textareaAutoResize(templateTextarea);
                             M.updateTextFields();
-                        })
-                        .getMsgTemplate();
+                        }
+                    } catch (err) {
+                        console.error("無法獲取模板", err);
+                    }
                 }
             });
         });
 
         // Save template logic
-        saveTemplateBtn.addEventListener('click', () => {
+        saveTemplateBtn.addEventListener('click', async () => {
             const newTemplate = templateTextarea.value.trim();
             if (!newTemplate) {
                 showResult('模板不能為空', 'error');
@@ -793,22 +809,22 @@
             saveTemplateBtn.disabled = true;
             saveTemplateBtn.textContent = '儲存中...';
 
-            google.script.run
-                .withSuccessHandler((result) => {
-                    saveTemplateBtn.disabled = false;
-                    saveTemplateBtn.textContent = '儲存設定';
-                    if (result.success) {
-                        showResult(result.message, 'success');
-                        const modal = M.Modal.getInstance(document.getElementById('settings-modal'));
-                        modal.close();
-                    }
-                })
-                .withFailureHandler((error) => {
-                    saveTemplateBtn.disabled = false;
-                    saveTemplateBtn.textContent = '儲存設定';
-                    showResult('儲存失敗: ' + error, 'error');
-                })
-                .updateMsgTemplate(newTemplate);
+            try {
+                const result = await callApi('updateMsgTemplate', { template: newTemplate });
+                saveTemplateBtn.disabled = false;
+                saveTemplateBtn.textContent = '儲存設定';
+                if (result.success) {
+                    showResult(result.message, 'success');
+                    const modal = M.Modal.getInstance(document.getElementById('settings-modal'));
+                    modal.close();
+                } else {
+                    showResult(result.message, 'error');
+                }
+            } catch (error) {
+                saveTemplateBtn.disabled = false;
+                saveTemplateBtn.textContent = '儲存設定';
+                showResult('儲存失敗: ' + error.message, 'error');
+            }
         });
 
 

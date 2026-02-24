@@ -19,6 +19,9 @@ function showSidebar() {
 }
 
 function doGet(e) {
+  if (e.parameter.action) {
+    return handleRequest(e, 'GET');
+  }
   const url = ScriptApp.getService().getUrl();
   PropertiesService.getScriptProperties().setProperty('url', url);
   const template = HtmlService.createTemplateFromFile('index.html');
@@ -27,6 +30,42 @@ function doGet(e) {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .setTitle('學員報到系統');
+}
+
+function doPost(e) {
+  return handleRequest(e, 'POST');
+}
+
+function handleRequest(e, method) {
+  let action = e.parameter.action;
+  let data = {};
+
+  if (method === 'POST' && e.postData && e.postData.contents) {
+    try {
+      data = JSON.parse(e.postData.contents);
+    } catch (err) { }
+  } else {
+    data = e.parameter;
+  }
+
+  let result = { success: false, message: 'Invalid action' };
+
+  try {
+    if (action === 'checkInStudent') {
+      result = checkInStudent(data.id);
+    } else if (action === 'getMsgTemplate') {
+      result = { success: true, message: getMsgTemplate() };
+    } else if (action === 'updateMsgTemplate') {
+      result = updateMsgTemplate(data.template);
+    } else {
+      result = { success: false, message: 'Unknown action: ' + action };
+    }
+  } catch (err) {
+    result = { success: false, message: err.toString() };
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 /**
  * @param {string} query
