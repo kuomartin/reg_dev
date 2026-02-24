@@ -331,7 +331,7 @@
         style="padding: 12px; font-weight: 500; box-shadow: 0 2px 5px rgba(0,0,0,0.2); display: none;">
         <div class="container flex-center">
             <i class="material-icons">warning</i>
-            <span>請先在腳本最上方設定您的 Web App URL (API_URL)！</span>
+            <span>請在網址後方加上 ?api=您的部署網址（例如：?api=https://script.google.com/...）</span>
         </div>
     </div>
     <div class="container">
@@ -425,40 +425,28 @@
         <div class="modal-content">
             <h5 class="blue-text text-darken-2"
                 style="font-weight: 700; display: flex; align-items: center; gap: 10px;">
-                <i class="material-icons">settings</i>設定
+                <i class="material-icons">settings</i>設定訊息模板
             </h5>
+            <p>請輸入報到成功後的訊息模板。使用 <code>{{變數名稱}}</code> 代替，接受任何學員名單標題列的內容（如：<code>{{姓名}}</code>）。</p>
 
-            <!-- API URL 設定 -->
-            <div style="margin-top: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #eee;">
-                <h6 style="font-weight: 600; color: var(--primary-color);">1. Apps Script API URL</h6>
-                <p style="font-size: 0.9rem;">請輸入您的 Apps Script Web App 部署網址。此設定將儲存於瀏覽器中。</p>
-                <div class="input-field">
-                    <input type="text" id="api-url-input" class="validate">
-                    <label for="api-url-input">Web App URL</label>
-                </div>
+            <div class="input-field" style="margin-top: 2rem;">
+                <textarea id="template-textarea" class="materialize-textarea"
+                    placeholder="例如：報到成功，姓名：{{姓名}}"></textarea>
+                <label for="template-textarea" class="active">訊息模板內容</label>
             </div>
 
-            <!-- 訊息模板設定 -->
-            <div style="margin-top: 1.5rem;">
-                <h6 style="font-weight: 600; color: var(--primary-color);">2. 訊息模板</h6>
-                <p style="font-size: 0.9rem;">請輸入報到成功後的訊息模板。使用 <code>{{變數名稱}}</code>
-                    代替，接受任何學員名單標題列的內容（如：<code>{{姓名}}</code>）。</p>
-                <div class="input-field" style="margin-top: 1rem;">
-                    <textarea id="template-textarea" class="materialize-textarea"
-                        placeholder="例如：報到成功，姓名：{{姓名}}"></textarea>
-                    <label for="template-textarea" class="active">訊息模板內容</label>
-                </div>
-                <div class="grey-text"
-                    style="font-size: 0.85rem; background: #f5f5f5; padding: 10px; border-radius: 8px;">
-                    <strong>常用變數：</strong> <code>{{姓名}}</code>, <code>{{學員代號}}</code>, <code>{{手機}}</code>
-                </div>
+            <div class="grey-text" style="font-size: 0.85rem; background: #f5f5f5; padding: 10px; border-radius: 8px;">
+                <strong>常用變數：</strong> <code>{{姓名}}</code>, <code>{{學員代號}}</code>, <code>{{手機}}</code>
             </div>
         </div>
         <div class="modal-footer"
             style="padding: 0 24px 20px; height: auto; display: flex; justify-content: flex-end; gap: 10px;">
             <button class="modal-close waves-effect waves-grey btn-flat">取消</button>
-            <button id="save-settings-btn" class="waves-effect waves-light btn blue">儲存設定</button>
+            <button id="save-template-btn" class="waves-effect waves-light btn blue">儲存設定</button>
         </div>
+    </div>
+    <div id="url-default" style="display: none;">
+        <?= (typeof url === 'undefined' || !url) ? '' : url; ?>
     </div>
 
     <!-- Compiled and minified JavaScript -->
@@ -486,9 +474,8 @@
         const qrPanelQrcode = document.getElementById('qr-panel-qrcode');
         const continuousScanToggle = document.getElementById('continuous-scan');
         const openSettingsBtn = document.getElementById('open-settings-btn');
-        const saveSettingsBtn = document.getElementById('save-settings-btn');
+        const saveTemplateBtn = document.getElementById('save-template-btn');
         const templateTextarea = document.getElementById('template-textarea');
-        const apiUrlInput = document.getElementById('api-url-input');
 
         let status = 'idle'; // scanning, processing, idle
         let currentCamera = 'environment';
@@ -501,21 +488,18 @@
 
         let activeToast = null;
 
-        // 取得 API URL：優先檢查 URL 參數 ?api=...，其次是 localStorage
+        // 取得 API URL：僅檢查 URL 參數 ?api=...
         let currentApiUrl = "";
         function getApiUrl() {
+            const defaultUrl = document.getElementById('url-default').innerText.trim();
+            const url = defaultUrl.startsWith("<?") ? "" : defaultUrl;
             const urlParams = new URLSearchParams(window.location.search);
-            const apiParam = urlParams.get('api');
-            if (apiParam) {
-                localStorage.setItem('API_URL', apiParam);
-                return apiParam;
-            }
-            return localStorage.getItem('API_URL') || "";
+            return urlParams.get('api') || url;
         }
 
         currentApiUrl = getApiUrl();
 
-        // 如果沒有 API URL，顯示警告並強制開啟設定
+        // 如果沒有 API URL，顯示警告
         if (!currentApiUrl) {
             document.getElementById('api-warning').style.display = 'block';
         }
@@ -524,10 +508,7 @@
         async function callApi(action, data = {}) {
             if (!currentApiUrl) {
                 document.getElementById('api-warning').style.display = 'block';
-                // 嘗試開啟設定 Modal
-                const modal = M.Modal.getInstance(document.getElementById('settings-modal'));
-                if (modal) modal.open();
-                throw new Error("請先設定 API URL");
+                throw new Error("請先在網址上提供 ?api= 參數");
             }
             const url = currentApiUrl + "?action=" + action;
             const response = await fetch(url, {
@@ -822,10 +803,6 @@
             var modals = document.querySelectorAll('.modal');
             M.Modal.init(modals, {
                 onOpenStart: async function () {
-                    // 初始化 API URL 輸入框
-                    apiUrlInput.value = currentApiUrl;
-                    M.updateTextFields();
-
                     // Fetch current template when modal opens
                     if (currentApiUrl) {
                         try {
@@ -841,46 +818,24 @@
                     }
                 }
             });
-
-            // 如果一開始就沒有 API URL，自動打開設定
-            if (!currentApiUrl) {
-                // 等待 Materialize 初始化完畢後開啟
-                setTimeout(() => {
-                    const modal = M.Modal.getInstance(document.getElementById('settings-modal'));
-                    if (modal) modal.open();
-                }, 500);
-            }
         });
 
         // Save settings logic
-        saveSettingsBtn.addEventListener('click', async () => {
-            const newApiUrl = apiUrlInput.value.trim();
+        saveTemplateBtn.addEventListener('click', async () => {
             const newTemplate = templateTextarea.value.trim();
 
-            if (!newApiUrl) {
-                showResult('API URL 不能為空', 'error');
-                return;
-            }
-
-            // 更新 API URL
-            currentApiUrl = newApiUrl;
-            localStorage.setItem('API_URL', newApiUrl);
-            document.getElementById('api-warning').style.display = 'none';
-
             if (!newTemplate) {
-                showResult('設定已儲存 (無模板修改)', 'success');
-                const modal = M.Modal.getInstance(document.getElementById('settings-modal'));
-                modal.close();
+                showResult('模板不能為空', 'error');
                 return;
             }
 
-            saveSettingsBtn.disabled = true;
-            saveSettingsBtn.textContent = '儲存中...';
+            saveTemplateBtn.disabled = true;
+            saveTemplateBtn.textContent = '儲存中...';
 
             try {
                 const result = await callApi('updateMsgTemplate', { template: newTemplate });
-                saveSettingsBtn.disabled = false;
-                saveSettingsBtn.textContent = '儲存設定';
+                saveTemplateBtn.disabled = false;
+                saveTemplateBtn.textContent = '儲存設定';
                 if (result.success) {
                     showResult(result.message, 'success');
                     const modal = M.Modal.getInstance(document.getElementById('settings-modal'));
@@ -889,8 +844,8 @@
                     showResult(result.message, 'error');
                 }
             } catch (error) {
-                saveSettingsBtn.disabled = false;
-                saveSettingsBtn.textContent = '儲存設定';
+                saveTemplateBtn.disabled = false;
+                saveTemplateBtn.textContent = '儲存設定';
                 showResult('模板儲存失敗: ' + error.message, 'error');
             }
         });
