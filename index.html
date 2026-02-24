@@ -445,9 +445,6 @@
             <button id="save-template-btn" class="waves-effect waves-light btn blue">儲存設定</button>
         </div>
     </div>
-    <div id="url-default" style="display: none;">
-        <?= (typeof url === 'undefined' || !url) ? '' : url; ?>
-    </div>
 
     <!-- Compiled and minified JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
@@ -491,8 +488,8 @@
         // 取得 API URL：僅檢查 URL 參數 ?api=...
         let currentApiUrl = "";
         function getApiUrl() {
-            const defaultUrl = document.getElementById('url-default').innerText.trim();
-            const url = defaultUrl.startsWith("<?") ? "" : defaultUrl;
+            const defaultUrl = "<?= url ?>";
+            const url = defaultUrl.startsWith("<") ? "" : defaultUrl;
             const urlParams = new URLSearchParams(window.location.search);
             return urlParams.get('api') || url;
         }
