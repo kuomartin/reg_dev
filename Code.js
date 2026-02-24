@@ -53,6 +53,8 @@ function handleRequest(e, method) {
   try {
     if (action === 'checkInStudent') {
       result = checkInStudent(data.id);
+    } else if (action === 'getAppUrl') {
+      result = { success: true, url: PropertiesService.getScriptProperties().getProperty('url') };
     } else if (action === 'getMsgTemplate') {
       result = { success: true, message: getMsgTemplate() };
     } else if (action === 'updateMsgTemplate') {

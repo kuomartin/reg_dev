@@ -731,7 +731,7 @@
 
         // QR Code Logic
         let qrCodeInstance = null;
-        const appUrl = API_URL;
+        let appUrl = API_URL;
         const qrUrlInput = document.getElementById('qr-url-input');
         const qrPanelLink = document.getElementById('qr-panel-link');
 
@@ -756,16 +756,20 @@
             updateQrCode(e.target.value);
         });
 
-        toggleQrBtn.addEventListener('click', () => {
+        toggleQrBtn.addEventListener('click', async () => {
             const isActive = qrPanel.classList.toggle('active');
 
             if (isActive) {
-                // Initial generation or check for reset if needed
-                if (!qrCodeInstance) {
-                    updateQrCode(qrUrlInput.value || appUrl);
+                // Determine the URL if not yet fetched
+                try {
+                    const result = await callApi('getAppUrl');
+                    if (result.success && result.url) {
+                        appUrl = result.url;
+                    }
+                } catch (e) {
+                    console.error("無法取得 App URL", e);
                 }
-            } else {
-                // Reset to appUrl after closing as requested
+
                 qrUrlInput.value = appUrl;
                 updateQrCode(appUrl);
             }
