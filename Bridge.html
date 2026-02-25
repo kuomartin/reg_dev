@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+</head>
+
+<body>
+    <script>
+        window.addEventListener('message', function (event) {
+            const data = event.data;
+            if (!data || !data.action) return;
+
+            // 接收來自 GitHub Pages 的指令，代為呼叫 google.script.run
+            if (data.action === 'checkInStudent') {
+                google.script.run
+                    .withSuccessHandler(result => event.source.postMessage({ id: data.id, status: 'success', result: result }, event.origin))
+                    .withFailureHandler(error => event.source.postMessage({ id: data.id, status: 'error', error: error.message }, event.origin))
+                    .checkInStudent(data.payload);
+            }
+            else if (data.action === 'getMsgTemplate') {
+                google.script.run
+                    .withSuccessHandler(result => event.source.postMessage({ id: data.id, status: 'success', result: result }, event.origin))
+                    .withFailureHandler(error => event.source.postMessage({ id: data.id, status: 'error', error: error.message }, event.origin))
+                    .getMsgTemplate();
+            }
+            else if (data.action === 'updateMsgTemplate') {
+                google.script.run
+                    .withSuccessHandler(result => event.source.postMessage({ id: data.id, status: 'success', result: result }, event.origin))
+                    .withFailureHandler(error => event.source.postMessage({ id: data.id, status: 'error', error: error.message }, event.origin))
+                    .updateMsgTemplate(data.payload);
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -19,76 +19,54 @@ function showSidebar() {
 }
 
 function doGet(e) {
-  if (e.parameter.action) {
-    return handleRequest(e, 'GET');
-  }
-  const url = ScriptApp.getService().getUrl();
-  PropertiesService.getScriptProperties().setProperty('url', url);
-  const template = HtmlService.createTemplateFromFile('index.html');
-  template.url = url;
-  return template.evaluate()
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-    .setTitle('學員報到系統');
+  // 必須設定 ALLOWALL，GitHub Pages 才能用 iframe 嵌入它
+  return HtmlService.createHtmlOutputFromFile('Bridge')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-function doPost(e) {
-  return handleRequest(e, 'POST');
-}
 
-function handleRequest(e, method) {
-  let action = e.parameter.action;
-  let data = {};
-
-  if (method === 'POST' && e.postData && e.postData.contents) {
-    try {
-      data = JSON.parse(e.postData.contents);
-    } catch (err) { }
-  } else {
-    data = e.parameter;
-  }
-
-  let result = { success: false, message: 'Invalid action' };
-
-  try {
-    if (action === 'checkInStudent') {
-      result = checkInStudent(data.id);
-    } else if (action === 'getAppUrl') {
-      result = { success: true, url: PropertiesService.getScriptProperties().getProperty('url') };
-    } else if (action === 'getMsgTemplate') {
-      result = { success: true, message: getMsgTemplate() };
-    } else if (action === 'updateMsgTemplate') {
-      result = updateMsgTemplate(data.template);
-    } else {
-      result = { success: false, message: 'Unknown action: ' + action };
-    }
-  } catch (err) {
-    result = { success: false, message: err.toString() };
-  }
-
-  return ContentService.createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
-}
 /**
+ * 優化後的學員搜尋：僅搜尋關鍵欄位，不載入全表
  * @param {string} query
  * @returns {Map<string, any> | null}
  */
 function findStudentRow(query) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName('學員名單');
-  let data = sheet.getDataRange().getValues();
-  let title = data.shift();
-  let idIndex = title.indexOf('學員代號');
-  let phoneIndex = title.indexOf('手機');
+  if (!query) return null;
 
-  for (let i = 0; i < data.length; i++) {
-    let row = data[i];
-    let id = row[idIndex];
-    let phone = row[phoneIndex];
-    if (query === id || query === phone) {
-      return new Map(row.map((value, index) => [title[index], value]));
-    }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('學員名單');
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+
+  if (lastRow <= 1) return null; // 只有標題或空表
+
+  // 1. 取得標題行（用於後續對應欄位名稱）
+  const title = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  const idIndex = title.indexOf('學員代號') + 1; // getRange 是 1-based
+  const phoneIndex = title.indexOf('手機') + 1;
+
+  // 2. 使用 TextFinder 鎖定特定欄位進行全文匹配
+  // 我們先找「學員代號」，沒找到再找「手機」
+  const searchIndices = [idIndex, phoneIndex].filter(idx => idx > 0);
+  let foundRange = null;
+
+  for (let colIdx of searchIndices) {
+    const searchRange = sheet.getRange(2, colIdx, lastRow - 1, 1);
+    foundRange = searchRange.createTextFinder(query)
+      .matchEntireCell(true) // 精確匹配
+      .findNext();
+
+    if (foundRange) break;
   }
+
+  // 3. 如果找到了，只讀取那一行的資料
+  if (foundRange) {
+    const rowIndex = foundRange.getRow();
+    const rowValues = sheet.getRange(rowIndex, 1, 1, lastColumn).getValues()[0];
+
+    return new Map(rowValues.map((value, index) => [title[index], value]));
+  }
+
   return null;
 }
 
@@ -121,25 +99,12 @@ function checkInStudent(studentId) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName('學員報到');
 
-    // 準備寫入的資料 (二維陣列形式)
-    let rowData = [[`'${studentId}`, new Date()]];
-
-    // 取得鎖定，確保在高併發時不會覆蓋資料
+    // Acquire lock to avoid race conditions
     lock.waitLock(10000);
 
-    // 1. 找到最後一列資料的位置
-    let maxRows = sheet.getMaxRows();
-    let emptyRows = sheet.getRange(1, 1, maxRows).getValues().reverse().findIndex(c => c != '');
-    const targetRow = maxRows - emptyRows + 1;
-
-    // 2. 判斷空間是否足夠，不夠則新增列
-    if (targetRow > maxRows) {
-      sheet.insertRowsAfter(maxRows, 1);
-    }
-
-    // 3. 在資料範圍的下一列寫入
-    // getRange(row, column, numRows, numColumns)
-    sheet.getRange(targetRow, 1, 1, rowData[0].length).setValues(rowData);
+    // Fast and safe approach: appendRow automatically adds data right after the last row
+    // and handles sheet expansion without having to fetch the entire sheet.
+    sheet.appendRow([`'${studentId}`, new Date()]);
 
     lock.releaseLock();
     let msgTemplate = getMsgTemplate();
@@ -209,18 +174,37 @@ function restoreFomula() {
   ui.alert('還原成功:\n' + cells.join('\n'));
 }
 
+let CACHED_TEMPLATE = null;
+
 function getMsgTemplate() {
-  const jsonTemplate = PropertiesService.getScriptProperties().getProperty('msgTemplate');
-  if (!jsonTemplate) return '報到成功；姓名：{{姓名}}，序號：{{序號}}';
-  try {
-    return JSON.parse(jsonTemplate);
-  } catch (e) {
-    return jsonTemplate;
+  if (CACHED_TEMPLATE !== null) return CACHED_TEMPLATE;
+
+  const cache = CacheService.getScriptCache();
+  let jsonTemplate = cache.get('msgTemplate');
+
+  if (!jsonTemplate) {
+    jsonTemplate = PropertiesService.getScriptProperties().getProperty('msgTemplate');
+    if (jsonTemplate) {
+      cache.put('msgTemplate', jsonTemplate, 21600); // 快取 6 小時
+    }
   }
+
+  if (!jsonTemplate) {
+    CACHED_TEMPLATE = '報到成功；姓名：{{姓名}}，序號：{{序號}}';
+  } else {
+    try {
+      CACHED_TEMPLATE = JSON.parse(jsonTemplate);
+    } catch (e) {
+      CACHED_TEMPLATE = jsonTemplate;
+    }
+  }
+  return CACHED_TEMPLATE;
 }
 
 function updateMsgTemplate(template) {
   const jsonTemplate = JSON.stringify(template);
   PropertiesService.getScriptProperties().setProperty('msgTemplate', jsonTemplate);
+  CacheService.getScriptCache().put('msgTemplate', jsonTemplate, 21600);
+  CACHED_TEMPLATE = template;
   return { success: true, message: '訊息模板已更新' };
 }

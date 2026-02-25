@@ -2,6 +2,7 @@
 <html lang="zh-TW">
 
 <head>
+    <base target="_top">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>學員報到系統 | QR Code 掃描</title>
@@ -326,14 +327,16 @@
 </head>
 
 <body>
-    <div id="custom-toast-container"></div>
-    <div id="api-warning" class="orange darken-3 white-text center-align"
-        style="padding: 12px; font-weight: 500; box-shadow: 0 2px 5px rgba(0,0,0,0.2); display: none;">
+    <iframe id="gas-bridge" style="display:none;"></iframe>
+
+    <div id="url-warning" class="orange darken-3 white-text center-align"
+        style="display: none; padding: 12px; font-weight: 500; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
         <div class="container flex-center">
             <i class="material-icons">warning</i>
-            <span>請在網址後方加上 ?api=您的部署網址（例如：?api=https://script.google.com/...）</span>
+            <span>缺少後端連結！請確認網址結尾包含 <code>?gasurl=你的GAS網址</code></span>
         </div>
     </div>
+    <div id="custom-toast-container"></div>
     <div class="container">
         <div class="main-container">
             <div class="center-align" style="margin-bottom: 2rem;">
@@ -406,11 +409,11 @@
         <div style="position: relative;">
             <div id="qr-panel" class="z-depth-4">
                 <h6>掃描進入系統</h6>
-                <a id="qr-panel-link" href="#" target="_blank">
+                <a id="qr-panel-link" href="<?= url ?>" target="_blank">
                     <div id="qr-panel-qrcode"></div>
                 </a>
                 <div class="qr-url-text">
-                    <input type="text" id="qr-url-input" value="" placeholder="輸入內容或網址">
+                    <input type="text" id="qr-url-input" value="<?= url ?>" placeholder="輸入內容或網址">
                 </div>
             </div>
             <button id="toggle-qr-btn" class="btn-floating btn-large waves-effect waves-light blue darken-2 tooltipped"
@@ -456,7 +459,6 @@
         document.addEventListener('DOMContentLoaded', function () {
             M.AutoInit();
         });
-
         const videoContainer = document.getElementById('video-container');
         const videoElem = document.getElementById('qr-video');
         const qrInput = document.getElementById('qr-input');
@@ -474,6 +476,37 @@
         const saveTemplateBtn = document.getElementById('save-template-btn');
         const templateTextarea = document.getElementById('template-textarea');
 
+        // ====== 網址參數解析與 Iframe 初始化 (改用 ID 版) ======
+        const urlParams = new URLSearchParams(window.location.search);
+        const deployId = urlParams.get('id'); // 1. 改抓 id 參數
+        const gasIframe = document.getElementById('gas-bridge');
+        const urlWarning = document.getElementById('url-warning');
+        // 2. 自動組裝完整的 GAS Web App 網址
+        let gasUrl = null;
+        if (deployId) {
+            // GAS Web App 固定格式： https://script.google.com/macros/s/{ID}/exec
+            gasUrl = `https://script.google.com/macros/s/${deployId}/exec`;
+            gasIframe.src = gasUrl;
+        } else {
+            // 如果沒有 ID，顯示警告並鎖定介面
+            if (urlWarning) {
+                urlWarning.style.display = 'block';
+                urlWarning.innerHTML = `
+            <div class="container flex-center">
+                <i class="material-icons">warning</i>
+                <span>缺少部署 ID！請確認網址結尾包含 <code>?id=您的GAS部署ID</code></span>
+            </div>`;
+            }
+
+            if (startBtn) startBtn.disabled = true;
+            if (checkinBtn) checkinBtn.disabled = true;
+            if (qrInput) qrInput.disabled = true;
+        }
+
+        // 3. 設定右下角系統 QR Code 的連結 (直接用當前網址即可)
+        const appUrl = window.location.href;
+        // =======================================
+
         let status = 'idle'; // scanning, processing, idle
         let currentCamera = 'environment';
         let animationFrameId = null;
@@ -485,37 +518,41 @@
 
         let activeToast = null;
 
-        // 取得 API URL：僅檢查 URL 參數 ?api=...
-        let currentApiUrl = "";
-        function getApiUrl() {
-            const defaultUrl = "<?= url ?>";
-            const url = defaultUrl.startsWith("<") ? "" : defaultUrl;
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('api') || url;
-        }
 
-        currentApiUrl = getApiUrl();
 
-        // 如果沒有 API URL，顯示警告
-        if (!currentApiUrl) {
-            document.getElementById('api-warning').style.display = 'block';
-        }
-
-        // 共用的 API 呼叫函式
-        async function callApi(action, data = {}) {
-            if (!currentApiUrl) {
-                document.getElementById('api-warning').style.display = 'block';
-                throw new Error("請先在網址上提供 ?api= 參數");
-            }
-            const url = currentApiUrl + "?action=" + action;
-            const response = await fetch(url, {
-                method: "POST",
-                body: JSON.stringify(data),
-                headers: {
-                    "Content-Type": "text/plain;charset=utf-8"
+        /**
+         * 核心通訊函式：將請求封裝成 Promise 發送給 GAS iframe
+         */
+        function callGas(action, payload) {
+            return new Promise((resolve, reject) => {
+                if (!gasUrl) {
+                    reject("未設定 GAS 網址參數");
+                    return;
                 }
+
+                // 產生唯一的訊息 ID
+                const messageId = Date.now().toString() + Math.random().toString();
+
+                const handler = function (event) {
+                    if (event.data && event.data.id === messageId) {
+                        window.removeEventListener('message', handler);
+                        if (event.data.status === 'success') {
+                            resolve(event.data.result);
+                        } else {
+                            reject(event.data.error);
+                        }
+                    }
+                };
+
+                window.addEventListener('message', handler);
+
+                // 確保訊息發送
+                gasIframe.contentWindow.postMessage({
+                    id: messageId,
+                    action: action,
+                    payload: payload
+                }, '*');
             });
-            return await response.json();
         }
 
         function showResult(message, type) {
@@ -602,31 +639,31 @@
 
         // Result message click handler is now handled inside showResult
 
-        async function checkInStudent(id) {
+        function checkInStudent(id) {
             if (!id || id.trim() === '') return;
             status = 'processing';
             updateUI();
             showResult(`${id} 執行中...`, 'loading');
             qrInput.value = '';
 
-            try {
-                const result = await callApi('checkInStudent', { id: id });
+            callGas('checkInStudent', id)
+                .then((result) => {
+                    const isContinuous = continuousScanToggle.checked;
+                    status = isContinuous ? 'scanning' : 'idle';
+                    updateUI();
 
-                const isContinuous = continuousScanToggle.checked;
-                status = isContinuous ? 'scanning' : 'idle';
-                updateUI();
-
-                if (result && result.message) {
-                    showResult(result.message, result.success ? 'success' : 'error');
-                } else {
-                    showResult('未知錯誤', 'error');
-                }
-            } catch (error) {
-                const isContinuous = continuousScanToggle.checked;
-                status = isContinuous ? 'scanning' : 'idle';
-                updateUI();
-                showResult(`報到失敗: ${error.message}`, 'error');
-            }
+                    if (result && result.message) {
+                        showResult(result.message, result.success ? 'success' : 'error');
+                    } else {
+                        showResult('未知錯誤', 'error');
+                    }
+                })
+                .catch((error) => {
+                    const isContinuous = continuousScanToggle.checked;
+                    status = isContinuous ? 'scanning' : 'idle';
+                    updateUI();
+                    showResult(`報到失敗: ${error}`, 'error');
+                });
         };
 
         function drawLine(begin, end, color) {
@@ -744,7 +781,6 @@
 
         // QR Code Logic
         let qrCodeInstance = null;
-        let appUrl = currentApiUrl;
         const qrUrlInput = document.getElementById('qr-url-input');
         const qrPanelLink = document.getElementById('qr-panel-link');
 
@@ -769,20 +805,16 @@
             updateQrCode(e.target.value);
         });
 
-        toggleQrBtn.addEventListener('click', async () => {
+        toggleQrBtn.addEventListener('click', () => {
             const isActive = qrPanel.classList.toggle('active');
 
             if (isActive) {
-                // Determine the URL if not yet fetched
-                try {
-                    const result = await callApi('getAppUrl');
-                    if (result.success && result.url) {
-                        appUrl = result.url;
-                    }
-                } catch (e) {
-                    console.error("無法取得 App URL", e);
+                // Initial generation or check for reset if needed
+                if (!qrCodeInstance) {
+                    updateQrCode(qrUrlInput.value || appUrl);
                 }
-
+            } else {
+                // Reset to appUrl after closing as requested
                 qrUrlInput.value = appUrl;
                 updateQrCode(appUrl);
             }
@@ -799,28 +831,21 @@
 
             var modals = document.querySelectorAll('.modal');
             M.Modal.init(modals, {
-                onOpenStart: async function () {
-                    // Fetch current template when modal opens
-                    if (currentApiUrl) {
-                        try {
-                            const result = await callApi('getMsgTemplate');
-                            if (result.success) {
-                                templateTextarea.value = result.message;
-                                M.textareaAutoResize(templateTextarea);
-                                M.updateTextFields();
-                            }
-                        } catch (err) {
-                            console.error("無法獲取模板", err);
-                        }
-                    }
+                onOpenStart: function () {
+                    // 使用 callGas 替換 google.script.run
+                    callGas('getMsgTemplate')
+                        .then((template) => {
+                            templateTextarea.value = template;
+                            M.textareaAutoResize(templateTextarea);
+                            M.updateTextFields();
+                        })
+                        .catch((error) => console.error("無法取得模板:", error));
                 }
             });
         });
-
-        // Save settings logic
-        saveTemplateBtn.addEventListener('click', async () => {
+        // Save template logic
+        saveTemplateBtn.addEventListener('click', () => {
             const newTemplate = templateTextarea.value.trim();
-
             if (!newTemplate) {
                 showResult('模板不能為空', 'error');
                 return;
@@ -829,22 +854,21 @@
             saveTemplateBtn.disabled = true;
             saveTemplateBtn.textContent = '儲存中...';
 
-            try {
-                const result = await callApi('updateMsgTemplate', { template: newTemplate });
-                saveTemplateBtn.disabled = false;
-                saveTemplateBtn.textContent = '儲存設定';
-                if (result.success) {
-                    showResult(result.message, 'success');
-                    const modal = M.Modal.getInstance(document.getElementById('settings-modal'));
-                    modal.close();
-                } else {
-                    showResult(result.message, 'error');
-                }
-            } catch (error) {
-                saveTemplateBtn.disabled = false;
-                saveTemplateBtn.textContent = '儲存設定';
-                showResult('模板儲存失敗: ' + error.message, 'error');
-            }
+            callGas('updateMsgTemplate', newTemplate)
+                .then((result) => {
+                    saveTemplateBtn.disabled = false;
+                    saveTemplateBtn.textContent = '儲存設定';
+                    if (result.success) {
+                        showResult(result.message, 'success');
+                        const modal = M.Modal.getInstance(document.getElementById('settings-modal'));
+                        modal.close();
+                    }
+                })
+                .catch((error) => {
+                    saveTemplateBtn.disabled = false;
+                    saveTemplateBtn.textContent = '儲存設定';
+                    showResult('儲存失敗: ' + error, 'error');
+                });
         });
 
 
