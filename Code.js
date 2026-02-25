@@ -9,7 +9,7 @@ function onOpen(e) {
 }
 
 function showSidebar() {
-  const template = HtmlService.createTemplateFromFile('index.html');
+  const template = HtmlService.createTemplateFromFile('Sidebar.html');
   template.url = PropertiesService.getScriptProperties().getProperty('url');
   const htmlOutput = template.evaluate()
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')

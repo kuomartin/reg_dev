@@ -5,8 +5,8 @@
     <base target="_top">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>學員報到系統 | QR Code 掃描</title>
-    <meta name="description" content="學員報到系統，支援手機掃描 QR Code 與手動輸入，即時查驗學員身份。">
+    <title>學員報到系統</title>
+    <meta name="description" content="學員報到系統，支援手動輸入學員代號或手機號碼，即時查驗學員身份。">
     <meta name="theme-color" content="#2196f3">
     <!-- Compiled and minified CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
@@ -66,34 +66,6 @@
             .input-field {
                 margin-top: 1rem;
             }
-        }
-
-        #video-container {
-            width: 100%;
-            max-width: 480px;
-            margin: 1.5rem auto;
-            position: relative;
-            border: 4px solid var(--primary-color);
-            border-radius: 16px;
-            overflow: hidden;
-            display: none;
-            box-shadow: 0 12px 30px rgba(33, 150, 243, 0.2);
-            background: #000;
-        }
-
-        #video-container.mirrored {
-            transform: scaleX(-1);
-        }
-
-        video {
-            width: 100%;
-            height: auto;
-            display: none;
-        }
-
-        #qr-canvas {
-            width: 100%;
-            display: block;
         }
 
         #result-message {
@@ -190,10 +162,6 @@
                 opacity: 1;
                 transform: translateY(0) scale(1);
             }
-        }
-
-        .scanner-controls {
-            margin-top: 2rem;
         }
 
         /* Enhanced button styles */
@@ -327,21 +295,21 @@
 </head>
 
 <body>
-    <iframe id="gas-bridge" style="display:none;"></iframe>
-
-    <div id="url-warning" class="orange darken-3 white-text center-align"
-        style="display: none; padding: 12px; font-weight: 500; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+    <div id="custom-toast-container"></div>
+    <? if (typeof url === 'undefined' || !url) { ?>
+    <div class="orange darken-3 white-text center-align"
+        style="padding: 12px; font-weight: 500; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
         <div class="container flex-center">
             <i class="material-icons">warning</i>
-            <span>缺少後端連結！請確認網址結尾包含 <code>?gasurl=你的GAS網址</code></span>
+            <span>請先將腳本部署為 Web App (網頁應用程式)，並前往 Web App 以取得 URL。</span>
         </div>
     </div>
-    <div id="custom-toast-container"></div>
+    <? } ?>
     <div class="container">
         <div class="main-container">
             <div class="center-align" style="margin-bottom: 2rem;">
                 <h4 class="blue-text text-darken-2" style="font-weight: 700; margin-bottom: 0.5rem;">學員報到系統</h4>
-                <p class="grey-text">請掃描 QR Code 或輸入學員代號</p>
+                <p class="grey-text">請輸入學員代號或手機號碼</p>
             </div>
 
             <div class="row valign-wrapper-mobile" style="margin-bottom: 1rem; flex-wrap: wrap;">
@@ -359,43 +327,14 @@
             </div>
 
 
-            <div class="divider"></div>
-
-            <div class="section center-align">
-                <div id="video-container">
-                    <video id="qr-video" playsinline></video>
-                    <canvas id="qr-canvas"></canvas>
-                </div>
-
-                <div class="row">
-                    <div class="col s12 center-align" style="margin-bottom: 1.5rem;">
-                        <div class="switch">
-                            <label>
-                                單次掃描
-                                <input type="checkbox" id="continuous-scan">
-                                <span class="lever"></span>
-                                連續掃描
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col s12 flex-center">
-                        <button id="start-button" class="btn waves-effect waves-light blue darken-1">
-                            <i class="material-icons left">qr_code_scanner</i>
-                            <span id="start-btn-text">開始掃描</span>
-                        </button>
-                        <button id="flip-button" class="btn waves-effect waves-light orange" disabled>
-                            <i class="material-icons">flip_camera_android</i>
-                        </button>
-                    </div>
-                </div>
-            </div>
             <!-- <div class="footer center-align grey-text text-darken-1" style="margin-top: 3rem; font-size: 0.8rem;">
                 <p>&copy; 2026 by xaxaxax 學員報到系統 v2.1</p>
             </div> -->
         </div>
+    </div>
+    <div id="url-default" style="display: none;">
+        "
+        <?= url ?>"
     </div>
 
     <!-- Floating Buttons -->
@@ -409,11 +348,11 @@
         <div style="position: relative;">
             <div id="qr-panel" class="z-depth-4">
                 <h6>掃描進入系統</h6>
-                <a id="qr-panel-link" href="#" target="_blank">
+                <a id="qr-panel-link" href="<?= url ?>" target="_blank">
                     <div id="qr-panel-qrcode"></div>
                 </a>
                 <div class="qr-url-text">
-                    <input type="text" id="qr-url-input" value="" placeholder="輸入內容或網址">
+                    <input type="text" id="qr-url-input" value="<?= url ?>" placeholder="輸入內容或網址">
                 </div>
             </div>
             <button id="toggle-qr-btn" class="btn-floating btn-large waves-effect waves-light blue darken-2 tooltipped"
@@ -451,109 +390,25 @@
 
     <!-- Compiled and minified JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-    <!-- Load jsQR library from CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>
         // Initialize Materialize elements
         document.addEventListener('DOMContentLoaded', function () {
             M.AutoInit();
         });
-        const videoContainer = document.getElementById('video-container');
-        const videoElem = document.getElementById('qr-video');
+
         const qrInput = document.getElementById('qr-input');
         const qrcode = document.getElementById('qrcode');
-        const startBtn = document.getElementById('start-button');
-        const startBtnText = document.getElementById('start-btn-text');
-        const flipBtn = document.getElementById('flip-button');
         const checkinBtn = document.getElementById('checkin-button');
         const toastContainer = document.getElementById('custom-toast-container');
         const toggleQrBtn = document.getElementById('toggle-qr-btn');
         const qrPanel = document.getElementById('qr-panel');
         const qrPanelQrcode = document.getElementById('qr-panel-qrcode');
-        const continuousScanToggle = document.getElementById('continuous-scan');
         const openSettingsBtn = document.getElementById('open-settings-btn');
         const saveTemplateBtn = document.getElementById('save-template-btn');
         const templateTextarea = document.getElementById('template-textarea');
 
-        let status = 'idle'; // scanning, processing, idle
-        let currentCamera = 'environment';
-        let animationFrameId = null;
-        let canvas = document.getElementById('qr-canvas');
-        let canvasContext = canvas.getContext('2d', { willReadFrequently: true });
-        let lastScannedCode = null;
-        let nullFramesCount = 0;
-        const NULL_FRAMES_THRESHOLD = 30; // About 0.5-1 second of no detection to reset lastScannedCode
-
         let activeToast = null;
-
-        // ====== 網址參數解析與 Iframe 初始化 ======
-        const urlParams = new URLSearchParams(window.location.search);
-        const deployId = urlParams.get('id');
-        const gasIframe = document.getElementById('gas-bridge');
-        const urlWarning = document.getElementById('url-warning');
-        let gasUrl = null;
-        if (deployId) {
-            gasUrl = `https://script.google.com/macros/s/${deployId}/exec`;
-            gasIframe.src = gasUrl;
-        } else {
-            // 缺少 ID 時的警告與鎖定處理... (保留你原本寫的)
-            if (urlWarning) urlWarning.style.display = 'block';
-            if (startBtn) startBtn.disabled = true;
-            if (checkinBtn) checkinBtn.disabled = true;
-            if (qrInput) qrInput.disabled = true;
-        }
-
-        const appUrl = window.location.href;
-        document.getElementById('qr-url-input').value = appUrl;
-        document.getElementById('qr-panel-link').href = appUrl;
-        // =======================================
-
-        // ====== 秘密地道通訊邏輯 ======
-        let gasPort = null;      // 用來儲存地道出口
-        let isGasReady = false;  // 狀態標記
-
-        // 監聽 GAS 拋出來的地道出口
-        window.addEventListener('message', (event) => {
-            if (event.data && event.data.action === 'GAS_READY') {
-                gasPort = event.ports[0]; // 成功接住 port2
-                isGasReady = true;
-                console.log("✅ GAS 秘密地道連線成功！");
-            }
-        });
-
-        function callGas(action, payload) {
-            return new Promise((resolve, reject) => {
-                if (!isGasReady || !gasPort) {
-                    reject("系統初始化中，請稍等一兩秒再試...");
-                    return;
-                }
-
-                const messageId = Date.now().toString() + Math.random().toString();
-
-                // 在地道口監聽專屬的結果回傳
-                const handler = function (event) {
-                    if (event.data && event.data.id === messageId) {
-                        gasPort.removeEventListener('message', handler); // 收到後移除監聽器
-                        if (event.data.status === 'success') {
-                            resolve(event.data.result);
-                        } else {
-                            reject(event.data.error);
-                        }
-                    }
-                };
-
-                gasPort.addEventListener('message', handler);
-                gasPort.start(); // 啟動監聽 (使用 addEventListener 時必加)
-
-                // 直接從地道把指令塞進去 (完全繞過 window.postMessage，不會被擋)
-                gasPort.postMessage({
-                    id: messageId,
-                    action: action,
-                    payload: payload
-                });
-            });
-        }
 
         function showResult(message, type) {
             // Remove previous loading toast if it exists
@@ -612,163 +467,35 @@
             if (activeToast) hideToast(activeToast);
         }
 
-        function updateUI() {
-            if (status === 'scanning') {
-                videoContainer.style.display = 'block';
-                flipBtn.disabled = false;
-                startBtnText.textContent = '停止掃描';
-                startBtn.className = 'btn waves-effect waves-light red darken-1';
-                startBtn.disabled = false;
-            } else if (status === 'processing') {
-                startBtn.disabled = true;
-                flipBtn.disabled = true;
-            } else { // idle
-                videoContainer.style.display = 'none';
-                flipBtn.disabled = true;
-                startBtnText.textContent = '開始掃描';
-                startBtn.className = 'btn waves-effect waves-light blue darken-1';
-                startBtn.disabled = false;
-            }
-
-            if (currentCamera === 'user') {
-                videoContainer.classList.add('mirrored');
-            } else {
-                videoContainer.classList.remove('mirrored');
-            }
-        }
-
         // Result message click handler is now handled inside showResult
 
         function checkInStudent(id) {
+            if (typeof google === 'undefined') {
+                showResult('請在 Google Apps Script 中執行', 'error');
+                return;
+            }
             if (!id || id.trim() === '') return;
-            status = 'processing';
-            updateUI();
             showResult(`${id} 執行中...`, 'loading');
             qrInput.value = '';
 
-            callGas('checkInStudent', id)
-                .then((result) => {
-                    const isContinuous = continuousScanToggle.checked;
-                    status = isContinuous ? 'scanning' : 'idle';
-                    updateUI();
-
+            google.script.run
+                .withSuccessHandler((result) => {
                     if (result && result.message) {
                         showResult(result.message, result.success ? 'success' : 'error');
                     } else {
                         showResult('未知錯誤', 'error');
                     }
                 })
-                .catch((error) => {
-                    const isContinuous = continuousScanToggle.checked;
-                    status = isContinuous ? 'scanning' : 'idle';
-                    updateUI();
+                .withFailureHandler((error) => {
                     showResult(`報到失敗: ${error}`, 'error');
-                });
+                })
+                .checkInStudent(id);
         };
-
-        function drawLine(begin, end, color) {
-            canvasContext.beginPath();
-            canvasContext.moveTo(begin.x, begin.y);
-            canvasContext.lineTo(end.x, end.y);
-            canvasContext.lineWidth = 4;
-            canvasContext.strokeStyle = color;
-            canvasContext.stroke();
-        }
-
-        function scanQRCode() {
-            if (status === 'idle') return;
-
-            if (status === 'scanning' && videoElem.readyState === videoElem.HAVE_ENOUGH_DATA) {
-                canvas.height = videoElem.videoHeight;
-                canvas.width = videoElem.videoWidth;
-                canvasContext.drawImage(videoElem, 0, 0, canvas.width, canvas.height);
-                const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                    inversionAttempts: "dontInvert",
-                });
-
-                if (code) {
-                    drawLine(code.location.topLeftCorner, code.location.topRightCorner, "#FF3B58");
-                    drawLine(code.location.topRightCorner, code.location.bottomRightCorner, "#FF3B58");
-                    drawLine(code.location.bottomRightCorner, code.location.bottomLeftCorner, "#FF3B58");
-                    drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "#FF3B58");
-
-                    console.log(`code: ${code.data}`);
-                    nullFramesCount = 0;
-                    let data = code.data.trim();
-                    if (data && data !== lastScannedCode) {
-                        lastScannedCode = data;
-                        qrInput.value = data;
-                        M.updateTextFields();
-                        if (!continuousScanToggle.checked) {
-                            stopScanning();
-                        }
-                        checkInStudent(data);
-                    }
-                } else {
-                    nullFramesCount++;
-                    if (nullFramesCount > NULL_FRAMES_THRESHOLD) {
-                        lastScannedCode = null;
-                    }
-                }
-            }
-            animationFrameId = requestAnimationFrame(scanQRCode);
-        }
-
-        async function startScanning() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: currentCamera },
-                    audio: false
-                });
-                videoElem.srcObject = stream;
-                videoElem.setAttribute('playsinline', true);
-                await videoElem.play();
-
-                status = 'scanning';
-                updateUI();
-
-                // Scroll to video container
-                videoContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-                scanQRCode();
-            } catch (err) {
-                showResult('無法開啟相機，請檢查權限及連線安全性。', 'error');
-            }
-        }
-
-        function stopScanning() {
-            status = 'idle';
-            lastScannedCode = null; // Reset when stopping
-            nullFramesCount = 0;
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-            }
-            if (videoElem.srcObject) {
-                videoElem.srcObject.getTracks().forEach(track => track.stop());
-                videoElem.srcObject = null;
-            }
-            updateUI();
-        }
-
-        startBtn.addEventListener('click', () => {
-            if (status === 'scanning') stopScanning();
-            else if (status === 'idle') startScanning();
-        });
-
-        flipBtn.addEventListener('click', async () => {
-            currentCamera = (currentCamera === 'environment') ? 'user' : 'environment';
-            if (status === 'scanning') {
-                stopScanning();
-                await startScanning();
-            }
-        });
 
         checkinBtn.addEventListener('click', () => {
             const id = qrInput.value.trim();
             if (id) checkInStudent(id);
-            else showResult('請輸入學員代號或進行掃描', 'error');
+            else showResult('請輸入學員代號', 'error');
         });
 
         qrInput.addEventListener('keypress', (e) => {
@@ -781,6 +508,7 @@
 
         // QR Code Logic
         let qrCodeInstance = null;
+        const appUrl = "<?= url || '' ?>";
         const qrUrlInput = document.getElementById('qr-url-input');
         const qrPanelLink = document.getElementById('qr-panel-link');
 
@@ -832,17 +560,18 @@
             var modals = document.querySelectorAll('.modal');
             M.Modal.init(modals, {
                 onOpenStart: function () {
-                    // 使用 callGas 替換 google.script.run
-                    callGas('getMsgTemplate')
-                        .then((template) => {
+                    // Fetch current template when modal opens
+                    google.script.run
+                        .withSuccessHandler((template) => {
                             templateTextarea.value = template;
                             M.textareaAutoResize(templateTextarea);
                             M.updateTextFields();
                         })
-                        .catch((error) => console.error("無法取得模板:", error));
+                        .getMsgTemplate();
                 }
             });
         });
+
         // Save template logic
         saveTemplateBtn.addEventListener('click', () => {
             const newTemplate = templateTextarea.value.trim();
@@ -854,8 +583,8 @@
             saveTemplateBtn.disabled = true;
             saveTemplateBtn.textContent = '儲存中...';
 
-            callGas('updateMsgTemplate', newTemplate)
-                .then((result) => {
+            google.script.run
+                .withSuccessHandler((result) => {
                     saveTemplateBtn.disabled = false;
                     saveTemplateBtn.textContent = '儲存設定';
                     if (result.success) {
@@ -864,11 +593,12 @@
                         modal.close();
                     }
                 })
-                .catch((error) => {
+                .withFailureHandler((error) => {
                     saveTemplateBtn.disabled = false;
                     saveTemplateBtn.textContent = '儲存設定';
                     showResult('儲存失敗: ' + error, 'error');
-                });
+                })
+                .updateMsgTemplate(newTemplate);
         });
 
 
