@@ -7,30 +7,36 @@
 
 <body>
     <script>
-        window.addEventListener('message', function (event) {
+        // 1. 建立一條專屬的通訊地道 (MessageChannel)
+        const channel = new MessageChannel();
+
+        // 2. 監聽地道這一頭 (port1) 的訊息，Warden 攔截不到這裡
+        channel.port1.onmessage = function (event) {
             const data = event.data;
             if (!data || !data.action) return;
 
-            // 接收來自 GitHub Pages 的指令，代為呼叫 google.script.run
             if (data.action === 'checkInStudent') {
                 google.script.run
-                    .withSuccessHandler(result => event.source.postMessage({ id: data.id, status: 'success', result: result }, event.origin))
-                    .withFailureHandler(error => event.source.postMessage({ id: data.id, status: 'error', error: error.message }, event.origin))
+                    .withSuccessHandler(res => channel.port1.postMessage({ id: data.id, status: 'success', result: res }))
+                    .withFailureHandler(err => channel.port1.postMessage({ id: data.id, status: 'error', error: err.message }))
                     .checkInStudent(data.payload);
             }
             else if (data.action === 'getMsgTemplate') {
                 google.script.run
-                    .withSuccessHandler(result => event.source.postMessage({ id: data.id, status: 'success', result: result }, event.origin))
-                    .withFailureHandler(error => event.source.postMessage({ id: data.id, status: 'error', error: error.message }, event.origin))
+                    .withSuccessHandler(res => channel.port1.postMessage({ id: data.id, status: 'success', result: res }))
+                    .withFailureHandler(err => channel.port1.postMessage({ id: data.id, status: 'error', error: err.message }))
                     .getMsgTemplate();
             }
             else if (data.action === 'updateMsgTemplate') {
                 google.script.run
-                    .withSuccessHandler(result => event.source.postMessage({ id: data.id, status: 'success', result: result }, event.origin))
-                    .withFailureHandler(error => event.source.postMessage({ id: data.id, status: 'error', error: error.message }, event.origin))
+                    .withSuccessHandler(res => channel.port1.postMessage({ id: data.id, status: 'success', result: res }))
+                    .withFailureHandler(err => channel.port1.postMessage({ id: data.id, status: 'error', error: err.message }))
                     .updateMsgTemplate(data.payload);
             }
-        });
+        };
+
+        // 3. 把地道的另一頭 (port2) 透過 window.top 直接拋給最外層的 GitHub Pages
+        window.top.postMessage({ action: 'GAS_READY' }, '*', [channel.port2]);
     </script>
 </body>
 

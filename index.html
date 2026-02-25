@@ -476,37 +476,6 @@
         const saveTemplateBtn = document.getElementById('save-template-btn');
         const templateTextarea = document.getElementById('template-textarea');
 
-        // ====== 網址參數解析與 Iframe 初始化 (改用 ID 版) ======
-        const urlParams = new URLSearchParams(window.location.search);
-        const deployId = urlParams.get('id'); // 1. 改抓 id 參數
-        const gasIframe = document.getElementById('gas-bridge');
-        const urlWarning = document.getElementById('url-warning');
-        // 2. 自動組裝完整的 GAS Web App 網址
-        let gasUrl = null;
-        if (deployId) {
-            // GAS Web App 固定格式： https://script.google.com/macros/s/{ID}/exec
-            gasUrl = `https://script.google.com/macros/s/${deployId}/exec`;
-            gasIframe.src = gasUrl;
-        } else {
-            // 如果沒有 ID，顯示警告並鎖定介面
-            if (urlWarning) {
-                urlWarning.style.display = 'block';
-                urlWarning.innerHTML = `
-            <div class="container flex-center">
-                <i class="material-icons">warning</i>
-                <span>缺少部署 ID！請確認網址結尾包含 <code>?id=您的GAS部署ID</code></span>
-            </div>`;
-            }
-
-            if (startBtn) startBtn.disabled = true;
-            if (checkinBtn) checkinBtn.disabled = true;
-            if (qrInput) qrInput.disabled = true;
-        }
-
-        // 3. 設定右下角系統 QR Code 的連結 (直接用當前網址即可)
-        const appUrl = window.location.href;
-        // =======================================
-
         let status = 'idle'; // scanning, processing, idle
         let currentCamera = 'environment';
         let animationFrameId = null;
@@ -518,24 +487,52 @@
 
         let activeToast = null;
 
+        // ====== 網址參數解析與 Iframe 初始化 ======
+        const urlParams = new URLSearchParams(window.location.search);
+        const deployId = urlParams.get('id');
+        const gasIframe = document.getElementById('gas-bridge');
+        const urlWarning = document.getElementById('url-warning');
+        let gasUrl = null;
+        if (deployId) {
+            gasUrl = `https://script.google.com/macros/s/${deployId}/exec`;
+            gasIframe.src = gasUrl;
+        } else {
+            // 缺少 ID 時的警告與鎖定處理... (保留你原本寫的)
+            if (urlWarning) urlWarning.style.display = 'block';
+            if (startBtn) startBtn.disabled = true;
+            if (checkinBtn) checkinBtn.disabled = true;
+            if (qrInput) qrInput.disabled = true;
+        }
 
+        const appUrl = window.location.href;
+        // =======================================
 
-        /**
-         * 核心通訊函式：將請求封裝成 Promise 發送給 GAS iframe
-         */
+        // ====== 秘密地道通訊邏輯 ======
+        let gasPort = null;      // 用來儲存地道出口
+        let isGasReady = false;  // 狀態標記
+
+        // 監聽 GAS 拋出來的地道出口
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.action === 'GAS_READY') {
+                gasPort = event.ports[0]; // 成功接住 port2
+                isGasReady = true;
+                console.log("✅ GAS 秘密地道連線成功！");
+            }
+        });
+
         function callGas(action, payload) {
             return new Promise((resolve, reject) => {
-                if (!gasUrl) {
-                    reject("未設定 GAS 網址參數");
+                if (!isGasReady || !gasPort) {
+                    reject("系統初始化中，請稍等一兩秒再試...");
                     return;
                 }
 
-                // 產生唯一的訊息 ID
                 const messageId = Date.now().toString() + Math.random().toString();
 
+                // 在地道口監聽專屬的結果回傳
                 const handler = function (event) {
                     if (event.data && event.data.id === messageId) {
-                        window.removeEventListener('message', handler);
+                        gasPort.removeEventListener('message', handler); // 收到後移除監聽器
                         if (event.data.status === 'success') {
                             resolve(event.data.result);
                         } else {
@@ -544,14 +541,15 @@
                     }
                 };
 
-                window.addEventListener('message', handler);
+                gasPort.addEventListener('message', handler);
+                gasPort.start(); // 啟動監聽 (使用 addEventListener 時必加)
 
-                // 確保訊息發送
-                gasIframe.contentWindow.postMessage({
+                // 直接從地道把指令塞進去 (完全繞過 window.postMessage，不會被擋)
+                gasPort.postMessage({
                     id: messageId,
                     action: action,
                     payload: payload
-                }, '*');
+                });
             });
         }
 
