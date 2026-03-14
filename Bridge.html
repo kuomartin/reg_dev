@@ -16,16 +16,11 @@
         <? if (!deploymentId) { ?>
         <p style="color:#c62828;font-weight:bold;">無法取得部署 ID，請確認此腳本已部署為 Web 應用程式。</p>
         <? } else { ?>
-        <p>請點擊下方連結前往學員報到系統：</p>
-        <p>
-            <a href="<?= redirectUrl ?>" target="_top" style="font-size:1.1rem;">
-                前往 kuomartin.github.io/reg_dev
-            </a>
-        </p>
+        <p>請點擊<a href="<?= redirectUrl ?>" target="_top">連結</a>前往學員報到系統</p>
         <? if (saveUrl) { ?>
         <p style="margin-top:1.5rem;">
             <a href="<?= saveUrl ?>" target="_self" style="font-size:0.95rem;color:#1976d2;">
-                儲存目前 ID 至 Properties
+                儲存目前 ID
             </a>
         </p>
         <? } ?>

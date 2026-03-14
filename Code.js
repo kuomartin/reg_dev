@@ -3,8 +3,6 @@ function onOpen(e) {
   // Create a custom menu
   ui.createMenu("額外選單")
     .addItem("顯示報到側邊欄", "showSidebar")
-    .addItem("備份公式", "backupFomula")
-    .addItem("還原公式", "restoreFomula")
     .addToUi();
 }
 
@@ -146,50 +144,6 @@ function int2Col(col) {
     col = Math.floor(col / 26);
   }
   return result;
-}
-
-function backupFomula() {
-  const backup = [];
-  const cells = [];
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  ss.getSheets().forEach(sheet => {
-    let formulaArray = sheet.getDataRange().getFormulas();
-    let formulas = [];
-    for (let i = 0; i < formulaArray.length; i++) {
-      for (let j = 0; j < formulaArray[i].length; j++) {
-        if (formulaArray[i][j] !== '') {
-          formulas.push({ row: i + 1, col: j + 1, formula: formulaArray[i][j] });
-          cells.push(`${sheet.getName()}!${int2Col(j + 1)}${i + 1}`);
-        }
-      }
-    }
-    backup.push({ sheetName: sheet.getName(), formulas: formulas });
-  })
-  PropertiesService.getScriptProperties().setProperty('backup', JSON.stringify(backup));
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('備份成功:\n' + cells.join('\n'));
-}
-
-function restoreFomula() {
-  const ui = SpreadsheetApp.getUi();
-  const backup = PropertiesService.getScriptProperties().getProperty('backup');
-  const cells = [];
-  if (!backup) {
-    ui.alert('沒有備份資料');
-    return;
-  }
-  const backupData = JSON.parse(backup);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  backupData.forEach(item => {
-    const sheet = ss.getSheetByName(item.sheetName);
-    if (sheet) {
-      item.formulas.forEach(formula => {
-        sheet.getRange(formula.row, formula.col).setFormula(formula.formula);
-        cells.push(`${sheet.getName()}!${int2Col(formula.col)}${formula.row}`);
-      })
-    }
-  })
-  ui.alert('還原成功:\n' + cells.join('\n'));
 }
 
 let CACHED_TEMPLATE = null;
