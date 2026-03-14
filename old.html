@@ -85,18 +85,13 @@
             transform: scaleX(-1);
         }
 
-        #qr-reader {
-            width: 100%;
-            min-height: 260px;
-        }
-
-        #video-container video {
+        video {
             width: 100%;
             height: auto;
-            display: block;
+            display: none;
         }
 
-        #video-container canvas {
+        #qr-canvas {
             width: 100%;
             display: block;
         }
@@ -346,7 +341,7 @@
         <div class="main-container">
             <div class="center-align" style="margin-bottom: 2rem;">
                 <h4 class="blue-text text-darken-2" style="font-weight: 700; margin-bottom: 0.5rem;">學員報到系統</h4>
-                <p class="grey-text">請掃描 QR Code / Barcode 或輸入學員代號</p>
+                <p class="grey-text">請掃描 QR Code 或輸入學員代號</p>
                 <div id="connection-status"
                     style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#fff3cd;color:#8a6d3b;font-size:0.85rem;font-weight:600;">
                     <i id="connection-status-icon" class="bi bi-arrow-repeat" style="font-size:1rem;"></i>
@@ -373,7 +368,8 @@
 
             <div class="section center-align">
                 <div id="video-container">
-                    <div id="qr-reader"></div>
+                    <video id="qr-video" playsinline></video>
+                    <canvas id="qr-canvas"></canvas>
                 </div>
 
                 <div class="row">
@@ -409,9 +405,9 @@
                         <i class="bi bi-github" style="font-size: 1.05em;"></i>
                     </a>
                     <span style="margin: 0 8px; color: #b0bec5;">|</span>
-                    <a id="switch-to-old-link" href="old.html" title="切換回舊版"
+                    <a id="switch-to-new-link" href="index.html" title="切換回新版"
                        style="font-weight: 600; color: #546e7a; text-decoration: underline;">
-                        回到舊版
+                        使用新版
                     </a>
                 </p>
             </div>
@@ -471,8 +467,8 @@
 
     <!-- Compiled and minified JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-    <!-- Load html5-qrcode library from CDN -->
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- Load jsQR library from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>
         // Initialize Materialize elements
@@ -480,7 +476,7 @@
             M.AutoInit();
         });
         const videoContainer = document.getElementById('video-container');
-        const qrReaderElem = document.getElementById('qr-reader');
+        const videoElem = document.getElementById('qr-video');
         const qrInput = document.getElementById('qr-input');
         const qrcode = document.getElementById('qrcode');
         const startBtn = document.getElementById('start-button');
@@ -498,29 +494,16 @@
         const connectionStatus = document.getElementById('connection-status');
         const connectionStatusIcon = document.getElementById('connection-status-icon');
         const connectionStatusText = document.getElementById('connection-status-text');
-        const switchToOldLink = document.getElementById('switch-to-old-link');
+        const switchToNewLink = document.getElementById('switch-to-new-link');
 
         let status = 'idle'; // scanning, processing, idle
         let currentCamera = 'environment';
+        let animationFrameId = null;
+        let canvas = document.getElementById('qr-canvas');
+        let canvasContext = canvas.getContext('2d', { willReadFrequently: true });
         let lastScannedCode = null;
-        let lastScanTimestamp = 0;
-        const DUPLICATE_SCAN_COOLDOWN_MS = 10000;
-        const SCAN_FPS = 12;
-        const SCAN_QRBOX = { width: 260, height: 260 };
-        const SCAN_FORMATS = [
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.ITF,
-            Html5QrcodeSupportedFormats.PDF_417,
-            Html5QrcodeSupportedFormats.DATA_MATRIX
-        ];
-        let html5Qrcode = null;
-        let isScannerRunning = false;
+        let nullFramesCount = 0;
+        const NULL_FRAMES_THRESHOLD = 30; // About 0.5-1 second of no detection to reset lastScannedCode
 
         let activeToast = null;
 
@@ -575,8 +558,8 @@
         const appUrl = window.location.href;
         document.getElementById('qr-url-input').value = appUrl;
         document.getElementById('qr-panel-link').href = appUrl;
-        if (switchToOldLink) {
-            switchToOldLink.href = `old.html${window.location.search || ''}`;
+        if (switchToNewLink) {
+            switchToNewLink.href = `index.html${window.location.search || ''}`;
         }
         // =======================================
 
@@ -755,122 +738,102 @@
                 });
         };
 
-        function handleScanSuccess(decodedText) {
-            if (status !== 'scanning') return;
-            const data = (decodedText || '').trim();
-            if (!data) return;
-
-            const now = Date.now();
-            if (data === lastScannedCode && (now - lastScanTimestamp) < DUPLICATE_SCAN_COOLDOWN_MS) {
-                return;
-            }
-
-            lastScannedCode = data;
-            lastScanTimestamp = now;
-            qrInput.value = data;
-            M.updateTextFields();
-
-            if (!continuousScanToggle.checked) {
-                stopScanning().finally(() => checkInStudent(data));
-                return;
-            }
-
-            checkInStudent(data);
+        function drawLine(begin, end, color) {
+            canvasContext.beginPath();
+            canvasContext.moveTo(begin.x, begin.y);
+            canvasContext.lineTo(end.x, end.y);
+            canvasContext.lineWidth = 4;
+            canvasContext.strokeStyle = color;
+            canvasContext.stroke();
         }
 
-        function handleScanError() {
-            // Intentionally no-op: html5-qrcode calls this frequently when no code is in frame.
-        }
+        function scanQRCode() {
+            if (status === 'idle') return;
 
-        async function startCameraWithFallback(scannerConfig) {
-            const cameraCandidates = [
-                { facingMode: { exact: currentCamera } },
-                { facingMode: currentCamera }
-            ];
+            if (status === 'scanning' && videoElem.readyState === videoElem.HAVE_ENOUGH_DATA) {
+                canvas.height = videoElem.videoHeight;
+                canvas.width = videoElem.videoWidth;
+                canvasContext.drawImage(videoElem, 0, 0, canvas.width, canvas.height);
+                const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "dontInvert",
+                });
 
-            let lastError = null;
-            for (const candidate of cameraCandidates) {
-                try {
-                    await html5Qrcode.start(candidate, scannerConfig, handleScanSuccess, handleScanError);
-                    isScannerRunning = true;
-                    return;
-                } catch (error) {
-                    lastError = error;
+                if (code) {
+                    drawLine(code.location.topLeftCorner, code.location.topRightCorner, "#FF3B58");
+                    drawLine(code.location.topRightCorner, code.location.bottomRightCorner, "#FF3B58");
+                    drawLine(code.location.bottomRightCorner, code.location.bottomLeftCorner, "#FF3B58");
+                    drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "#FF3B58");
+
+                    console.log(`code: ${code.data}`);
+                    nullFramesCount = 0;
+                    let data = code.data.trim();
+                    if (data && data !== lastScannedCode) {
+                        lastScannedCode = data;
+                        qrInput.value = data;
+                        M.updateTextFields();
+                        if (!continuousScanToggle.checked) {
+                            stopScanning();
+                        }
+                        checkInStudent(data);
+                    }
+                } else {
+                    nullFramesCount++;
+                    if (nullFramesCount > NULL_FRAMES_THRESHOLD) {
+                        lastScannedCode = null;
+                    }
                 }
             }
-
-            throw lastError || new Error('No available camera configuration.');
+            animationFrameId = requestAnimationFrame(scanQRCode);
         }
 
         async function startScanning() {
-            if (status !== 'idle') return;
-
-            if (!window.Html5Qrcode || !window.Html5QrcodeSupportedFormats) {
-                showResult('掃描器載入失敗，請重新整理頁面。', 'error');
-                return;
-            }
-
-            if (!html5Qrcode) {
-                html5Qrcode = new Html5Qrcode(qrReaderElem.id, {
-                    formatsToSupport: SCAN_FORMATS,
-                    verbose: false
-                });
-            }
-
-            const scannerConfig = {
-                fps: SCAN_FPS,
-                qrbox: SCAN_QRBOX,
-                disableFlip: false
-            };
-
             try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: currentCamera },
+                    audio: false
+                });
+                videoElem.srcObject = stream;
+                videoElem.setAttribute('playsinline', true);
+                await videoElem.play();
+
                 status = 'scanning';
                 updateUI();
+
+                // Scroll to video container
                 videoContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                await startCameraWithFallback(scannerConfig);
-            } catch (error) {
-                status = 'idle';
-                updateUI();
-                isScannerRunning = false;
+
+                scanQRCode();
+            } catch (err) {
                 showResult('無法開啟相機，請檢查權限及連線安全性。', 'error');
-                console.error('startScanning failed:', error);
             }
         }
 
-        async function stopScanning() {
+        function stopScanning() {
             status = 'idle';
-            lastScannedCode = null;
-            lastScanTimestamp = 0;
-
-            if (html5Qrcode && isScannerRunning) {
-                try {
-                    await html5Qrcode.stop();
-                } catch (error) {
-                    console.warn('stop scanner failed:', error);
-                }
-                try {
-                    await html5Qrcode.clear();
-                } catch (error) {
-                    console.warn('clear scanner failed:', error);
-                }
+            lastScannedCode = null; // Reset when stopping
+            nullFramesCount = 0;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
             }
-
-            isScannerRunning = false;
+            if (videoElem.srcObject) {
+                videoElem.srcObject.getTracks().forEach(track => track.stop());
+                videoElem.srcObject = null;
+            }
             updateUI();
         }
 
-        startBtn.addEventListener('click', async () => {
-            if (status === 'scanning') await stopScanning();
-            else if (status === 'idle') await startScanning();
+        startBtn.addEventListener('click', () => {
+            if (status === 'scanning') stopScanning();
+            else if (status === 'idle') startScanning();
         });
 
         flipBtn.addEventListener('click', async () => {
             currentCamera = (currentCamera === 'environment') ? 'user' : 'environment';
             if (status === 'scanning') {
-                await stopScanning();
+                stopScanning();
                 await startScanning();
-            } else {
-                updateUI();
             }
         });
 
