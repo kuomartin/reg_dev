@@ -1,7 +1,6 @@
 # 學員報到 Google Sheets + App Script
 
 ## Google Sheets [範本](https://docs.google.com/spreadsheets/d/15LZMCRlf6vuIX8uKqxF9xtRq9p3Gzvmeb05FSDDkWf4/edit?usp=sharing)
----
 
 ## 功能說明
 
