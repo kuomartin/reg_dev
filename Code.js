@@ -10,7 +10,8 @@ function onOpen(e) {
 
 function showSidebar() {
   const template = HtmlService.createTemplateFromFile('Sidebar.html');
-  template.url = PropertiesService.getScriptProperties().getProperty('url');
+  const id = PropertiesService.getScriptProperties().getProperty('id');
+  template.url = id ? 'https://kuomartin.github.io/reg_dev/?id=' + id : '';
   const htmlOutput = template.evaluate()
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
@@ -19,9 +20,32 @@ function showSidebar() {
 }
 
 function doGet(e) {
-  // 必須設定 ALLOWALL，GitHub Pages 才能用 iframe 嵌入它
-  return HtmlService.createHtmlOutputFromFile('Bridge')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  if (e.pathInfo === 'bridge') {
+    return HtmlService.createHtmlOutputFromFile('Bridge')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  const serviceUrl = ScriptApp.getService().getUrl();
+  const match = serviceUrl && serviceUrl.match(/\/macros\/s\/([^/]+)\/(?:exec|dev)/);
+  const deploymentId = match ? match[1] : null;
+  if (deploymentId) {
+    if (e.parameter && e.parameter.save === '1') {
+      PropertiesService.getScriptProperties().setProperty('id', deploymentId);
+    }
+    const redirectUrl = 'https://kuomartin.github.io/reg_dev/?id=' + deploymentId;
+    const saveUrl = serviceUrl + (serviceUrl.indexOf('?') === -1 ? '?' : '&') + 'save=1';
+    const saved = e.parameter && e.parameter.save === '1';
+    const html =
+      '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:sans-serif;padding:2rem;text-align:center;">' +
+      (saved ? '<p style="color:green;font-weight:bold;">已儲存 ID 至 Properties。</p>' : '') +
+      '<p>請點擊下方連結前往學員報到系統：</p>' +
+      '<p><a href="' + redirectUrl + '" target="_top" style="font-size:1.2rem;">前往 kuomartin.github.io/reg_dev</a></p>' +
+      '<p style="margin-top:1.5rem;"><a href="' + saveUrl + '" target="_self" style="font-size:0.95rem;color:#1976d2;">儲存目前 ID 至 Properties</a></p>' +
+      '</body></html>';
+    return HtmlService.createHtmlOutput(html).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  return HtmlService.createHtmlOutput(
+    '<p>無法取得部署 ID，請確認此腳本已部署為 Web 應用程式。</p>'
+  ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 

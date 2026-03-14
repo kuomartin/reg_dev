@@ -494,7 +494,7 @@
         const urlWarning = document.getElementById('url-warning');
         let gasUrl = null;
         if (deployId) {
-            gasUrl = `https://script.google.com/macros/s/${deployId}/exec`;
+            gasUrl = `https://script.google.com/macros/s/${deployId}/exec/bridge`;
             gasIframe.src = gasUrl;
         } else {
             // 缺少 ID 時的警告與鎖定處理... (保留你原本寫的)
