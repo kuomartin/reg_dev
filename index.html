@@ -512,45 +512,61 @@
         // ====== 秘密地道通訊邏輯 ======
         let gasPort = null;      // 用來儲存地道出口
         let isGasReady = false;  // 狀態標記
+        let gasReadyResolve = null;
+        const gasReadyPromise = new Promise((resolve) => {
+            gasReadyResolve = resolve;
+        });
 
         // 監聽 GAS 拋出來的地道出口
         window.addEventListener('message', (event) => {
             if (event.data && event.data.action === 'GAS_READY') {
                 gasPort = event.ports[0]; // 成功接住 port2
                 isGasReady = true;
+                if (gasReadyResolve) gasReadyResolve();
                 console.log("✅ GAS 秘密地道連線成功！");
             }
         });
 
+        function waitForGasReady(timeoutMs = 8000) {
+            if (isGasReady && gasPort) {
+                return Promise.resolve();
+            }
+            return Promise.race([
+                gasReadyPromise,
+                new Promise((_, reject) => {
+                    setTimeout(() => {
+                        reject('GAS 尚未連線。若你看到 403，請先在新分頁開啟 GAS 的 /exec/bridge 並完成授權，再回來重試。');
+                    }, timeoutMs);
+                })
+            ]);
+        }
+
         function callGas(action, payload) {
-            return new Promise((resolve, reject) => {
-                if (!isGasReady || !gasPort) {
-                    reject("系統初始化中，請稍等一兩秒再試...");
-                    return;
-                }
+            return waitForGasReady().then(() => {
+                return new Promise((resolve, reject) => {
+                    const messageId = Date.now().toString() + Math.random().toString();
 
-                const messageId = Date.now().toString() + Math.random().toString();
-
-                // 在地道口監聽專屬的結果回傳
-                const handler = function (event) {
-                    if (event.data && event.data.id === messageId) {
-                        gasPort.removeEventListener('message', handler); // 收到後移除監聽器
-                        if (event.data.status === 'success') {
-                            resolve(event.data.result);
-                        } else {
-                            reject(event.data.error);
+                    // 在地道口監聽專屬的結果回傳
+                    const handler = function (event) {
+                        if (event.data && event.data.id === messageId) {
+                            gasPort.removeEventListener('message', handler); // 收到後移除監聽器
+                            if (event.data.status === 'success') {
+                                resolve(event.data.result);
+                            } else {
+                                reject(event.data.error);
+                            }
                         }
-                    }
-                };
+                    };
 
-                gasPort.addEventListener('message', handler);
-                gasPort.start(); // 啟動監聽 (使用 addEventListener 時必加)
+                    gasPort.addEventListener('message', handler);
+                    gasPort.start(); // 啟動監聽 (使用 addEventListener 時必加)
 
-                // 直接從地道把指令塞進去 (完全繞過 window.postMessage，不會被擋)
-                gasPort.postMessage({
-                    id: messageId,
-                    action: action,
-                    payload: payload
+                    // 直接從地道把指令塞進去 (完全繞過 window.postMessage，不會被擋)
+                    gasPort.postMessage({
+                        id: messageId,
+                        action: action,
+                        payload: payload
+                    });
                 });
             });
         }
