@@ -494,7 +494,7 @@
         const urlWarning = document.getElementById('url-warning');
         let gasUrl = null;
         if (deployId) {
-            gasUrl = `https://script.google.com/macros/s/${deployId}/exec/bridge`;
+            gasUrl = `https://script.google.com/macros/s/${deployId}/exec?bridge=1`;
             gasIframe.src = gasUrl;
         } else {
             // 缺少 ID 時的警告與鎖定處理... (保留你原本寫的)
@@ -535,7 +535,7 @@
                 gasReadyPromise,
                 new Promise((_, reject) => {
                     setTimeout(() => {
-                        reject('GAS 尚未連線。若你看到 403，請先在新分頁開啟 GAS 的 /exec/bridge 並完成授權，再回來重試。');
+                        reject('GAS 尚未連線。若你看到 403，請先在新分頁開啟 GAS 的 /exec 並完成授權，再回來重試。');
                     }, timeoutMs);
                 })
             ]);
