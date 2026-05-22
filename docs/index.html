@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-TW">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Redirecting...</title>
+        <script>
+            // 將目前的查詢參數 (query string) 與錨點 (hash) 帶入 v3 目錄
+            var newUrl = "v3/" + window.location.search + window.location.hash;
+            window.location.replace(newUrl);
+        </script>
+        <!-- 若瀏覽器不支援 JavaScript 的備用方案 (不含參數) -->
+        <meta http-equiv="refresh" content="1; url=v3/" />
+    </head>
+    <body>
+        <p>
+            Redirecting to the latest version...
+            <a id="redirect-link" href="v3/">Click here</a> if you are not
+            redirected automatically.
+        </p>
+        <script>
+            // 若頁面停留，將手動點擊的連結也加上參數
+            document.getElementById("redirect-link").href = newUrl;
+        </script>
+    </body>
+</html>

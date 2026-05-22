@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="zh-TW">
+    <head>
+        <base target="_top" />
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>學員報到系統 | QR Code 掃描</title>
+        <meta
+            name="description"
+            content="學員報到系統，支援手機掃描 QR Code 與手動輸入，即時查驗學員身份。"
+        />
+        <meta name="theme-color" content="#2196f3" />
+        <!-- Compiled and minified CSS -->
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
+        />
+        <!-- Bootstrap Icons CDN -->
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+        />
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <iframe id="gas-bridge" style="display: none"></iframe>
+
+        <div
+            id="url-warning"
+            class="orange darken-3 white-text center-align"
+            style="
+                display: none;
+                padding: 12px;
+                font-weight: 500;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            "
+        >
+            <div class="container flex-center">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <span
+                    >缺少部署 ID！請確認網址結尾包含
+                    <code>?id=您的GAS部署ID</code></span
+                >
+            </div>
+        </div>
+        <div id="custom-toast-container"></div>
+        <div class="container">
+            <div class="main-container">
+                <div class="center-align" style="margin-bottom: 2rem">
+                    <h4
+                        class="blue-text text-darken-2"
+                        style="font-weight: 700; margin-bottom: 0.5rem"
+                    >
+                        學員報到系統
+                    </h4>
+                    <p class="grey-text">
+                        請掃描 QR Code / Barcode 或輸入學員代號
+                    </p>
+                    <div
+                        id="connection-status"
+                        style="
+                            display: inline-flex;
+                            align-items: center;
+                            gap: 8px;
+                            padding: 6px 12px;
+                            border-radius: 999px;
+                            background: #fff3cd;
+                            color: #8a6d3b;
+                            font-size: 0.85rem;
+                            font-weight: 600;
+                        "
+                    >
+                        <i
+                            id="connection-status-icon"
+                            class="bi bi-arrow-repeat"
+                            style="font-size: 1rem"
+                        ></i>
+                        <span id="connection-status-text">Bridge 連線中</span>
+                    </div>
+                </div>
+
+                <div
+                    id="sheets-tabs-container"
+                    style="margin-bottom: 2rem; display: none"
+                >
+                    <ul
+                        id="sheets-tabs"
+                        class="tabs"
+                        style="
+                            background: #f1f8fe;
+                            border-radius: 12px;
+                            overflow: hidden;
+                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+                        "
+                    >
+                        <!-- Tabs will be dynamically inserted here -->
+                    </ul>
+                    <div class="input-field" id="sheets-select-container">
+                        <select id="sheets-select"></select>
+                        <label>選擇報到分頁</label>
+                    </div>
+                </div>
+
+                <div
+                    class="row valign-wrapper-mobile"
+                    style="margin-bottom: 1rem; flex-wrap: wrap"
+                >
+                    <div class="input-field col s12 m10">
+                        <i class="bi bi-person-badge prefix"></i>
+                        <input type="text" id="qr-input" class="validate" />
+                        <label for="qr-input">輸入學員代號或手機號碼</label>
+                    </div>
+                    <div
+                        class="col s12 m2 center-align"
+                        style="margin-top: -10px"
+                    >
+                        <button
+                            id="checkin-button"
+                            class="btn-floating btn-large waves-effect waves-light green"
+                            title="送出報到"
+                        >
+                            <i class="bi bi-send-fill"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="section center-align">
+                    <div id="video-container">
+                        <div id="qr-reader"></div>
+                    </div>
+
+                    <div class="row">
+                        <div
+                            class="col s12 center-align"
+                            style="margin-bottom: 1.5rem"
+                        >
+                            <div class="switch">
+                                <label>
+                                    單次掃描
+                                    <input
+                                        type="checkbox"
+                                        id="continuous-scan"
+                                    />
+                                    <span class="lever"></span>
+                                    連續掃描
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col s12 flex-center">
+                            <button
+                                id="start-button"
+                                class="btn waves-effect waves-light blue darken-1"
+                            >
+                                <i class="bi bi-qr-code-scan left"></i>
+                                <span id="start-btn-text">開始掃描</span>
+                            </button>
+                            <button
+                                id="flip-button"
+                                class="btn waves-effect waves-light orange"
+                                disabled
+                            >
+                                <i class="bi bi-arrow-left-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 報到歷史紀錄 -->
+                <div
+                    id="history-container"
+                    style="margin-top: 2rem; display: none"
+                >
+                    <div
+                        style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 1rem;
+                        "
+                    >
+                        <h6
+                            class="grey-text text-darken-2"
+                            style="font-weight: 700; margin: 0"
+                        >
+                            近期報到紀錄
+                        </h6>
+                        <a
+                            href="#!"
+                            id="clear-history"
+                            class="grey-text"
+                            style="font-size: 0.8rem"
+                            >清空</a
+                        >
+                    </div>
+                    <ul
+                        id="history-list"
+                        class="collection"
+                        style="
+                            border-radius: 12px;
+                            border: none;
+                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+                            overflow: hidden;
+                        "
+                    >
+                        <!-- 紀錄會動態插入這裡 -->
+                    </ul>
+                </div>
+
+                <div
+                    class="footer center-align grey-text text-darken-1"
+                    style="margin-top: 3rem; font-size: 0.8rem"
+                >
+                    <p>
+                        &copy; 2026 by Martin Kuo 學員報到系統 v3.2
+                        <a
+                            href="https://github.com/kuomartin/reg_dev"
+                            target="_blank"
+                            rel="noopener"
+                            title="前往 GitHub"
+                            style="margin-left: 6px; vertical-align: middle"
+                        >
+                            <i
+                                class="bi bi-github"
+                                style="font-size: 1.05em"
+                            ></i>
+                        </a>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Floating Buttons -->
+        <div class="qr-fab-container">
+            <div style="position: relative">
+                <div id="qr-panel" class="z-depth-4">
+                    <h6>掃描進入系統</h6>
+                    <a id="qr-panel-link" href="#" target="_blank">
+                        <div id="qr-panel-qrcode"></div>
+                    </a>
+                    <div class="qr-url-text">
+                        <input
+                            type="text"
+                            id="qr-url-input"
+                            value=""
+                            placeholder="輸入內容或網址"
+                        />
+                    </div>
+                </div>
+                <button
+                    id="toggle-qr-btn"
+                    class="btn-floating btn-large waves-effect waves-light blue darken-2 tooltipped"
+                    data-position="left"
+                    data-tooltip="顯示/隱藏系統 QR Code"
+                >
+                    <i class="bi bi-qr-code"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Compiled and minified JavaScript -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+        <!-- Load html5-qrcode library from CDN -->
+        <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+        <script src="app.js"></script>
+    </body>
+</html>

@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-TW">
+    <head>
+        <base target="_top" />
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>學員報到系統</title>
+        <meta name="theme-color" content="#2196f3" />
+        <!-- Compiled and minified CSS -->
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+        />
+
+        <?!= include('SidebarStyle'); ?>
+    </head>
+
+    <body>
+        <div id="custom-toast-container"></div>
+        <? if (typeof url === 'undefined' || !url) { ?>
+        <div
+            class="orange darken-3 white-text center-align"
+            style="padding: 12px; font-weight: 500"
+        >
+            <div class="container flex-center">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <span>請先將腳本部署為 Web App 以取得 URL。</span>
+            </div>
+        </div>
+        <? } ?>
+
+        <div class="container">
+            <div class="main-container">
+                <div class="center-align" style="margin-bottom: 2rem">
+                    <h4
+                        class="blue-text text-darken-2"
+                        style="font-weight: 700; margin-bottom: 0.5rem"
+                    >
+                        學員報到系統
+                    </h4>
+                    <p class="grey-text">請輸入學員代號或手機號碼</p>
+                </div>
+
+                <div
+                    id="sheets-tabs-container"
+                    style="margin-bottom: 2rem; display: none"
+                >
+                    <ul
+                        id="sheets-tabs"
+                        class="tabs"
+                        style="
+                            background: #f1f8fe;
+                            border-radius: 12px;
+                            overflow: hidden;
+                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+                        "
+                    >
+                        <!-- Tabs will be dynamically inserted here -->
+                    </ul>
+                    <div class="input-field" id="sheets-select-container">
+                        <select id="sheets-select"></select>
+                        <label>選擇報到分頁</label>
+                    </div>
+                </div>
+
+                <div class="row" style="margin-bottom: 0.5rem">
+                    <div class="input-field col s12">
+                        <i class="bi bi-person-badge prefix"></i>
+                        <input type="text" id="qr-input" class="validate" />
+                        <label for="qr-input">輸入學員代號或手機號碼</label>
+                    </div>
+                </div>
+
+                <div
+                    class="row valign-wrapper-mobile"
+                    style="margin-bottom: 1rem; justify-content: space-between"
+                >
+                    <div class="col" style="padding-left: 0.75rem">
+                        <div class="switch">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    id="auto-jump-toggle"
+                                    checked
+                                />
+                                <span class="lever"></span>
+                                <span style="color: #333; font-weight: 500"
+                                    >自動跳轉</span
+                                >
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col right-align">
+                        <button
+                            id="checkin-button"
+                            class="btn-floating btn-large waves-effect waves-light green"
+                            title="送出報到"
+                        >
+                            <i class="bi bi-send-fill"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 報到歷史紀錄 -->
+                <div
+                    id="history-container"
+                    style="margin-top: 2rem; display: none"
+                >
+                    <div
+                        style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 1rem;
+                        "
+                    >
+                        <h6
+                            class="grey-text text-darken-2"
+                            style="font-weight: 700; margin: 0"
+                        >
+                            近期報到紀錄
+                        </h6>
+                        <a
+                            href="#!"
+                            id="clear-history"
+                            class="grey-text"
+                            style="font-size: 0.8rem"
+                            >清空</a
+                        >
+                    </div>
+                    <ul
+                        id="history-list"
+                        class="collection"
+                        style="
+                            border-radius: 12px;
+                            border: none;
+                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+                            overflow: hidden;
+                        "
+                    >
+                        <!-- 紀錄會動態插入這裡 -->
+                    </ul>
+                </div>
+
+                <div
+                    class="footer center-align grey-text text-darken-1"
+                    style="margin-top: 3rem; font-size: 0.8rem"
+                >
+                    <p>&copy; 2026 by Martin Kuo 學員報到系統 v3.2</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Floating Buttons -->
+        <div class="qr-fab-container">
+            <button
+                id="open-settings-btn"
+                class="btn-floating waves-effect waves-light grey darken-1 tooltipped modal-trigger"
+                href="#settings-modal"
+                data-position="left"
+                data-tooltip="編輯訊息模板"
+            >
+                <i class="bi bi-gear-fill"></i>
+            </button>
+            <div style="position: relative">
+                <div id="qr-panel" class="z-depth-4">
+                    <h6>掃描進入系統</h6>
+                    <a id="qr-panel-link" href="<?= url ?>" target="_blank">
+                        <div id="qr-panel-qrcode"></div>
+                    </a>
+                    <div class="qr-url-text">
+                        <input
+                            type="text"
+                            id="qr-url-input"
+                            value="<?= url ?>"
+                            placeholder="輸入內容或網址"
+                        />
+                    </div>
+                </div>
+                <button
+                    id="toggle-qr-btn"
+                    class="btn-floating btn-large waves-effect waves-light blue darken-2 tooltipped"
+                    data-position="left"
+                    data-tooltip="顯示/隱藏系統 QR Code"
+                >
+                    <i class="bi bi-qr-code"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal">
+            <div class="modal-content">
+                <h5
+                    class="blue-text text-darken-2"
+                    style="
+                        font-weight: 700;
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                    "
+                >
+                    <i class="bi bi-gear-fill"></i>設定訊息模板
+                </h5>
+                <p>
+                    請輸入報到成功後的訊息模板。接受標題列變數（如：<code>{{姓名}}</code>）。
+                </p>
+                <div class="input-field" style="margin-top: 2rem">
+                    <textarea
+                        id="template-textarea"
+                        class="materialize-textarea"
+                    ></textarea>
+                    <label for="template-textarea" class="active"
+                        >訊息模板內容</label
+                    >
+                </div>
+                <div class="input-field" style="margin-top: 1rem">
+                    <input type="text" id="sheets-input" />
+                    <label for="sheets-input" class="active"
+                        >報到分頁名稱 (逗號隔開)</label
+                    >
+                </div>
+            </div>
+            <div
+                class="modal-footer"
+                style="
+                    padding: 0 24px 20px;
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 10px;
+                "
+            >
+                <button class="modal-close waves-effect waves-grey btn-flat">
+                    取消
+                </button>
+                <button
+                    id="save-template-btn"
+                    class="waves-effect waves-light btn blue"
+                >
+                    儲存設定
+                </button>
+            </div>
+        </div>
+
+        <!-- Compiled and minified JavaScript -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+        <?!= include('SidebarScript'); ?>
+    </body>
+</html>

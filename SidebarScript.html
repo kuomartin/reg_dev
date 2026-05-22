@@ -1,0 +1,412 @@
+<script>
+    const qrInput = document.getElementById("qr-input");
+    const qrcode = document.getElementById("qrcode");
+    const checkinBtn = document.getElementById("checkin-button");
+    const autoJumpToggle = document.getElementById("auto-jump-toggle");
+    const toastContainer = document.getElementById("custom-toast-container");
+    const toggleQrBtn = document.getElementById("toggle-qr-btn");
+    const qrPanel = document.getElementById("qr-panel");
+    const qrPanelQrcode = document.getElementById("qr-panel-qrcode");
+    const openSettingsBtn = document.getElementById("open-settings-btn");
+    const saveTemplateBtn = document.getElementById("save-template-btn");
+    const templateTextarea = document.getElementById("template-textarea");
+    const sheetsInput = document.getElementById("sheets-input");
+    const sheetsTabsContainer = document.getElementById(
+        "sheets-tabs-container",
+    );
+    const sheetsTabsUl = document.getElementById("sheets-tabs");
+    const sheetsSelect = document.getElementById("sheets-select");
+    const sheetsSelectContainer = document.getElementById(
+        "sheets-select-container",
+    );
+    const historyContainer = document.getElementById("history-container");
+    const historyList = document.getElementById("history-list");
+    const clearHistoryBtn = document.getElementById("clear-history");
+
+    let activeToast = null;
+    let activeSheetName = "學員報到";
+    let dragged = false;
+    let checkInHistory = [];
+    const MAX_HISTORY = 20;
+
+    /**
+     * 統一更新當前選中的報到分頁
+     */
+    function updateActiveSheet(sheetName) {
+        activeSheetName = sheetName;
+        console.log("當前分頁更新為:", activeSheetName);
+
+        // 1. 同步更新 Tabs 視覺狀態
+        sheetsTabsUl.querySelectorAll("a").forEach((a) => {
+            if (a.textContent === sheetName) {
+                a.classList.add("active");
+            } else {
+                a.classList.remove("active");
+            }
+        });
+
+        // 2. 同步更新 Select 選單狀態
+        if (sheetsSelect && sheetsSelect.value !== sheetName) {
+            sheetsSelect.value = sheetName;
+            M.FormSelect.init(sheetsSelect); // 重新初始化 Materialize Select
+        }
+    }
+
+    function loadSheets() {
+        google.script.run
+            .withSuccessHandler((sheets) => {
+                if (sheets && sheets.length > 0) {
+                    renderSheetSwitcher(sheets);
+                }
+            })
+            .getCheckInSheets();
+    }
+
+    function renderSheetSwitcher(sheets) {
+        if (!sheets || sheets.length <= 1) {
+            sheetsTabsContainer.style.display = "none";
+            activeSheetName =
+                sheets && sheets.length === 1 ? sheets[0] : "學員報到";
+            return;
+        }
+
+        // 清空舊內容
+        sheetsTabsUl.innerHTML = "";
+        sheetsSelect.innerHTML = "";
+
+        sheets.forEach((sheet, index) => {
+            // 1. 建立 Tab (UL)
+            const li = document.createElement("li");
+            li.className = "tab";
+            const a = document.createElement("a");
+            a.href = "#!";
+            a.textContent = sheet;
+            if (
+                sheet === activeSheetName ||
+                (index === 0 && !sheets.includes(activeSheetName))
+            ) {
+                a.classList.add("active");
+                activeSheetName = sheet;
+            }
+
+            a.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (dragged) return; // 如果是拖曳中，不觸發點擊
+                updateActiveSheet(sheet);
+            };
+
+            li.appendChild(a);
+            sheetsTabsUl.appendChild(li);
+
+            // 2. 建立 Option (Select)
+            const option = document.createElement("option");
+            option.value = sheet;
+            option.textContent = sheet;
+            if (sheet === activeSheetName) option.selected = true;
+            sheetsSelect.appendChild(option);
+        });
+
+        sheetsTabsContainer.style.display = "block";
+        M.FormSelect.init(sheetsSelect); // 初始化下拉選單
+
+        // 監聽下拉選單變化
+        sheetsSelect.onchange = (e) => {
+            updateActiveSheet(e.target.value);
+        };
+
+        // 3. 拖曳滾動邏輯 (Mousedown/Mousemove)
+        let isDown = false;
+        let startX;
+        let scrollLeft;
+
+        if (!sheetsTabsUl.dataset.dragInit) {
+            sheetsTabsUl.addEventListener("mousedown", (e) => {
+                isDown = true;
+                dragged = false;
+                sheetsTabsUl.classList.add("dragging");
+                startX = e.pageX - sheetsTabsUl.offsetLeft;
+                scrollLeft = sheetsTabsUl.scrollLeft;
+            });
+
+            sheetsTabsUl.addEventListener("mouseleave", () => {
+                isDown = false;
+                sheetsTabsUl.classList.remove("dragging");
+            });
+
+            sheetsTabsUl.addEventListener("mouseup", () => {
+                isDown = false;
+                sheetsTabsUl.classList.remove("dragging");
+                setTimeout(() => {
+                    dragged = false;
+                }, 50);
+            });
+
+            sheetsTabsUl.addEventListener("mousemove", (e) => {
+                if (!isDown) return;
+                e.preventDefault();
+                const x = e.pageX - sheetsTabsUl.offsetLeft;
+                const walk = (x - startX) * 1.5;
+                if (Math.abs(walk) > 5) dragged = true;
+                sheetsTabsUl.scrollLeft = scrollLeft - walk;
+            });
+            sheetsTabsUl.dataset.dragInit = "true";
+        }
+    }
+
+    function showResult(message, type) {
+        if (activeToast && activeToast.dataset.type === "loading") {
+            hideToast(activeToast);
+        }
+        const toast = document.createElement("div");
+        toast.dataset.type = type;
+        let iconName = "";
+        let bgColor = "";
+        if (type === "success") {
+            iconName = "bi-check-circle-fill";
+            bgColor = "green darken-1";
+        } else if (type === "error") {
+            iconName = "bi-x-circle-fill";
+            bgColor = "red darken-1";
+        } else if (type === "loading") {
+            iconName = "bi-arrow-repeat";
+            bgColor = "blue darken-1";
+        }
+
+        toast.className = `custom-toast ${bgColor}`;
+        toast.innerHTML = `<i class="bi ${iconName} ${type === "loading" ? "loading-icon" : ""}"></i><span class="toast-message"></span>`;
+        toast.querySelector(".toast-message").textContent = message;
+        toastContainer.appendChild(toast);
+        activeToast = toast;
+
+        if (type !== "loading") {
+            setTimeout(() => {
+                hideToast(toast);
+            }, 3500);
+        }
+        toast.onclick = () => hideToast(toast);
+    }
+
+    function hideToast(toast) {
+        if (!toast || !toast.classList) return;
+        toast.classList.add("hide");
+        setTimeout(() => {
+            if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+            if (activeToast === toast) activeToast = null;
+        }, 300);
+    }
+
+    function addToHistory(message, type) {
+        const time = new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+        });
+        const entry = { message, type, time };
+        checkInHistory.unshift(entry);
+        if (checkInHistory.length > MAX_HISTORY) checkInHistory.pop();
+        renderHistory();
+    }
+
+    function renderHistory() {
+        if (!historyContainer || !historyList) return;
+        if (checkInHistory.length === 0) {
+            historyContainer.style.display = "none";
+            return;
+        }
+        historyContainer.style.display = "block";
+        historyList.innerHTML = "";
+        checkInHistory.forEach((item) => {
+            const li = document.createElement("li");
+            li.className = "collection-item";
+            li.style.display = "flex";
+            li.style.alignItems = "center";
+            li.style.gap = "12px";
+            li.style.padding = "10px 16px";
+            li.style.borderBottom = "1px solid #f0f0f0";
+            const icon = document.createElement("i");
+            icon.className =
+                item.type === "success"
+                    ? "bi bi-check-circle-fill green-text"
+                    : "bi bi-x-circle-fill red-text";
+            const content = document.createElement("div");
+            content.style.flex = "1";
+            content.style.whiteSpace = "pre-wrap";
+            content.innerHTML = `<span style="font-weight: 500; font-size: 0.95rem;">${item.message}</span>`;
+            const timeSpan = document.createElement("span");
+            timeSpan.className = "grey-text";
+            timeSpan.style.fontSize = "0.75rem";
+            timeSpan.textContent = item.time;
+            li.appendChild(icon);
+            li.appendChild(content);
+            li.appendChild(timeSpan);
+            historyList.appendChild(li);
+        });
+    }
+
+    if (clearHistoryBtn) {
+        clearHistoryBtn.onclick = (e) => {
+            e.preventDefault();
+            checkInHistory = [];
+            renderHistory();
+        };
+    }
+
+    function checkInStudent(id) {
+        if (typeof google === "undefined") {
+            showResult("請在 Google Apps Script 中執行", "error");
+            return;
+        }
+        if (!id || id.trim() === "") return;
+        showResult(`${id} 報到中...`, "loading");
+        qrInput.value = "";
+
+        google.script.run
+            .withSuccessHandler((result) => {
+                if (result && result.message) {
+                    showResult(
+                        result.message,
+                        result.success ? "success" : "error",
+                    );
+                    addToHistory(
+                        result.message,
+                        result.success ? "success" : "error",
+                    );
+                } else {
+                    showResult("未知錯誤", "error");
+                    addToHistory(`${id} 發生未知錯誤`, "error");
+                }
+            })
+            .withFailureHandler((error) => {
+                showResult(`報到失敗: ${error}`, "error");
+                addToHistory(`${id} 報到失敗: ${error}`, "error");
+            })
+            .checkInStudent(id, activeSheetName, autoJumpToggle.checked);
+    }
+
+    checkinBtn.addEventListener("click", () => {
+        const id = qrInput.value.trim();
+        if (id) checkInStudent(id);
+        else showResult("請輸入學員代號", "error");
+    });
+
+    qrInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+            const id = qrInput.value.trim();
+            if (id) checkInStudent(id);
+            else showResult("請輸入學員代號", "error");
+        }
+    });
+
+    // QR Code Logic
+    let qrCodeInstance = null;
+    const appUrl = "<?= url || '' ?>";
+    const qrUrlInput = document.getElementById("qr-url-input");
+    const qrPanelLink = document.getElementById("qr-panel-link");
+
+    function updateQrCode(text) {
+        if (!qrCodeInstance) {
+            qrCodeInstance = new QRCode(qrPanelQrcode, {
+                text: text || " ",
+                width: 180,
+                height: 180,
+                colorDark: "#2196f3",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H,
+            });
+        } else {
+            qrCodeInstance.clear();
+            qrCodeInstance.makeCode(text || " ");
+        }
+        qrPanelLink.href = text || "javascript:void(0)";
+    }
+
+    qrUrlInput.addEventListener("input", (e) => {
+        updateQrCode(e.target.value);
+    });
+
+    toggleQrBtn.addEventListener("click", () => {
+        const isActive = qrPanel.classList.toggle("active");
+        if (isActive) {
+            if (!qrCodeInstance) updateQrCode(qrUrlInput.value || appUrl);
+        } else {
+            qrUrlInput.value = appUrl;
+            updateQrCode(appUrl);
+        }
+        const icon = toggleQrBtn.querySelector("i");
+        icon.className = isActive ? "bi bi-x-lg" : "bi bi-qr-code";
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+        M.Tooltip.init(document.querySelectorAll(".tooltipped"));
+        M.Modal.init(document.querySelectorAll(".modal"), {
+            onOpenStart: function () {
+                google.script.run
+                    .withSuccessHandler((template) => {
+                        templateTextarea.value = template;
+                        M.textareaAutoResize(templateTextarea);
+                        M.updateTextFields();
+                    })
+                    .getMsgTemplate();
+
+                google.script.run
+                    .withSuccessHandler((sheets) => {
+                        sheetsInput.value = sheets.join(", ");
+                        M.updateTextFields();
+                    })
+                    .getCheckInSheets();
+            },
+        });
+        loadSheets();
+    });
+
+    saveTemplateBtn.addEventListener("click", () => {
+        const newTemplate = templateTextarea.value.trim();
+        const newSheetsStr = sheetsInput.value.trim();
+        if (!newTemplate) {
+            showResult("模板不能為空", "error");
+            return;
+        }
+        saveTemplateBtn.disabled = true;
+        saveTemplateBtn.textContent = "儲存中...";
+        const sheetsArr = newSheetsStr
+            ? newSheetsStr
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter((s) => s)
+            : ["學員報到"];
+
+        Promise.all([
+            new Promise((res, rej) => {
+                google.script.run
+                    .withSuccessHandler(res)
+                    .withFailureHandler(rej)
+                    .updateMsgTemplate(newTemplate);
+            }),
+            new Promise((res, rej) => {
+                google.script.run
+                    .withSuccessHandler(res)
+                    .withFailureHandler(rej)
+                    .updateCheckInSheets(sheetsArr);
+            }),
+        ])
+            .then((results) => {
+                saveTemplateBtn.disabled = false;
+                saveTemplateBtn.textContent = "儲存設定";
+                if (results.every((r) => r.success)) {
+                    showResult("設定已更新", "success");
+                    M.Modal.getInstance(
+                        document.getElementById("settings-modal"),
+                    ).close();
+                    renderSheetSwitcher(sheetsArr);
+                } else {
+                    showResult("部分設定儲存失敗", "error");
+                }
+            })
+            .catch((error) => {
+                saveTemplateBtn.disabled = false;
+                saveTemplateBtn.textContent = "儲存失敗: " + error;
+                showResult("儲存失敗: " + error, "error");
+            });
+    });
+</script>
