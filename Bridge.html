@@ -18,30 +18,35 @@
                 line-height: 1.6;
             "
         >
-            <? if (saved) { ?>
-            <p style="color: #2e7d32; font-weight: bold">
-                已儲存 ID 至 Properties。
-            </p>
-            <? } ?> <? if (!deploymentId) { ?>
+            <? if (!deploymentId) { ?>
             <p style="color: #c62828; font-weight: bold">
                 無法取得部署 ID，請確認此腳本已部署為 Web 應用程式。
             </p>
             <? } else { ?>
-            <p>
-                請點擊<a href="<?= redirectUrl ?>" target="_top">連結</a
-                >前往學員報到系統
+            <p style="color: #2e7d32; font-weight: bold">
+                ✅ 系統已自動完成初始化！
             </p>
-            <? if (saveUrl) { ?>
+            <p>
+                部署 ID：<code><?= deploymentId ?></code> 已成功記錄。<br />
+                現在您可以點擊下方連結前往報到系統。
+            </p>
             <p style="margin-top: 1.5rem">
                 <a
-                    href="<?= saveUrl ?>"
-                    target="_self"
-                    style="font-size: 0.95rem; color: #1976d2"
+                    href="<?= redirectUrl ?>"
+                    target="_top"
+                    style="
+                        background: #1976d2;
+                        color: white;
+                        padding: 10px 20px;
+                        border-radius: 4px;
+                        text-decoration: none;
+                        display: inline-block;
+                    "
                 >
-                    儲存目前 ID
+                    前往學員報到系統
                 </a>
             </p>
-            <? } ?> <? } ?>
+            <? } ?>
         </div>
 
         <script>
@@ -51,7 +56,7 @@
                 // 1. 建立一條專屬的通訊地道 (MessageChannel)
                 const channel = new MessageChannel();
 
-                // 2. 監聽地道這一頭 (port1) 的訊息，Warden 攔截不到這裡
+                // 2. 監聽地道這一頭 (port1) 的訊息
                 channel.port1.onmessage = function (event) {
                     const data = event.data;
                     if (!data || !data.action) return;

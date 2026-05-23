@@ -5,9 +5,23 @@ function onOpen(e) {
 }
 
 function showSidebar() {
+  const props = PropertiesService.getScriptProperties();
+  let id = props.getProperty("id");
+
+  // 嘗試自動偵測（若已部署 Web App，這在某些情況下能直接撈到 ID）
+  const serviceUrl = ScriptApp.getService().getUrl();
+  if (!id && serviceUrl) {
+    const match = serviceUrl.match(/\/macros\/s\/([^/]+)\/(?:exec|dev)/);
+    if (match && match[1]) {
+      id = match[1];
+      props.setProperty("id", id);
+    }
+  }
+
   const template = HtmlService.createTemplateFromFile("Sidebar.html");
-  const id = PropertiesService.getScriptProperties().getProperty("id");
   template.url = id ? "https://kuomartin.github.io/reg_dev/v3/?id=" + id : "";
+  template.webAppUrl = serviceUrl || ""; // 提供給前端作為初始化連結
+
   const htmlOutput = template
     .evaluate()
     .addMetaTag("viewport", "width=device-width, initial-scale=1.0")
@@ -22,19 +36,20 @@ function doGet(e) {
   const match =
     serviceUrl && serviceUrl.match(/\/macros\/s\/([^/]+)\/(?:exec|dev)/);
   const deploymentId = match ? match[1] : null;
-  const shouldSave = e && e.parameter && e.parameter.save === "1";
-  if (shouldSave && deploymentId) {
-    PropertiesService.getScriptProperties().setProperty("id", deploymentId);
+
+  // 只有在「直接開啟網址」而非「Bridge 模式」時才自動紀錄
+  if (deploymentId && !isBridgeMode) {
+    const props = PropertiesService.getScriptProperties();
+    if (props.getProperty("id") !== deploymentId) {
+      props.setProperty("id", deploymentId);
+    }
   }
+
   const template = HtmlService.createTemplateFromFile("Bridge");
   template.deploymentId = deploymentId || "";
   template.redirectUrl = deploymentId
     ? "https://kuomartin.github.io/reg_dev/v3/?id=" + deploymentId
     : "https://kuomartin.github.io/reg_dev/v3/";
-  template.saveUrl = serviceUrl
-    ? serviceUrl + (serviceUrl.indexOf("?") === -1 ? "?" : "&") + "save=1"
-    : "";
-  template.saved = shouldSave;
   template.isBridgeMode = isBridgeMode;
   return template
     .evaluate()

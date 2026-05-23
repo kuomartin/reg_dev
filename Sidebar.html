@@ -24,11 +24,22 @@
         <? if (typeof url === 'undefined' || !url) { ?>
         <div
             class="orange darken-3 white-text center-align"
-            style="padding: 12px; font-weight: 500"
+            style="padding: 16px; font-weight: 500"
         >
-            <div class="container flex-center">
-                <i class="bi bi-exclamation-triangle-fill"></i>
-                <span>請先將腳本部署為 Web App 以取得 URL。</span>
+            <div class="container">
+                <i
+                    class="bi bi-exclamation-triangle-fill"
+                    style="font-size: 1.5rem"
+                ></i>
+                <p style="margin: 8px 0">尚未偵測到部署 ID</p>
+                <a
+                    href="<?= webAppUrl ?>"
+                    target="_blank"
+                    class="btn-small white blue-text text-darken-2"
+                    style="font-weight: bold"
+                >
+                    點此開啟 Web App 完成初始化
+                </a>
             </div>
         </div>
         <? } ?>
